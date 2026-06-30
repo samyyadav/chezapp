@@ -957,7 +957,7 @@
     // headline
     ctx.fillStyle = '#3a1f2b';
     ctx.font = '600 48px Fraunces, serif';
-    ctx.fillText('We have a date.', W/2, 410);
+    ctx.fillText('Date with Chezy papa.', W/2, 410);
 
     function infoCard(y, label, value){
       roundRect(110,y,580,150,30);
@@ -1035,7 +1035,7 @@
       const foodName = state.selectedFood.name;
       const dateObj = new Date(state.selectedDate.y, state.selectedDate.m, state.selectedDate.d);
       const dateStr = dateObj.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-      const message = `We have a date! 💕 ${dateStr} at ${state.selectedTime} — eating ${foodName} at ${state.selectedPlace.name}.`;
+      const message = `Date with Chezy papa! 💕 ${dateStr} at ${state.selectedTime} — eating ${foodName} at ${state.selectedPlace.name}.`;
 
       canvas.toBlob(async (blob) => {
         const file = new File([blob], 'our-date-card.png', { type: 'image/png' });
