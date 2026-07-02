@@ -364,6 +364,7 @@
       </div>
       <div class="btn-row">
         <button class="btn-secondary" onclick="goTo('4m')">Back</button>
+        <button class="btn-primary" id="fooditem-next-btn" disabled onclick="goTo(5)">Continue</button>
       </div>
       <div class="progress" id="dots-4b"></div>
     </div>
@@ -567,7 +568,7 @@ const foodItems = [
 
 // ── Total steps per category (used for dots) ──────────────────────────────────
 function totalSteps(){
-  if(state.category==='movie') return 8; // 1,2,3,4,4m,5,6,7
+  if(state.category==='movie') return 7; // 1,2,3,4,5,6,7 — no meeting place step
   if(state.category==='food') return 8;  // 1,2,3,4,4m,4b,5,7
   return 7; // 1,2,3,4,4m,5,7
 }
@@ -581,8 +582,12 @@ function renderDots(slideNum){
   else if(key==='4m') step = 5;
   else if(key==='4b') step = 6;
   else if(key==='5'){
-    step = state.category==='food' ? 7 : 6;
-  } else if(key==='6') step = 7;
+    // movie: no 4m, so slide5=step5; food: 4m+4b before, so slide5=step7 (but food goes 4b→5→7, step7); others: 4m before, so slide5=step6
+    if(state.category==='movie') step = 5;
+    else if(state.category==='food') step = 7;
+    else step = 6;
+  }
+  else if(key==='6') step = state.category==='movie' ? 6 : 6;
   else step = parseInt(key);
 
   const el = document.getElementById('dots-' + slideNum);
@@ -722,10 +727,14 @@ function onCustomTime(){
   }
 }
 
-// Time next: always go to meeting place slide
+// Time next: skip meeting place for movie (cinema covers location), go direct to slide 5
 function onTimeNext(){
-  initMeetPlaceSlide();
-  goTo('4m');
+  if(state.category==='movie'){
+    goTo(5);
+  } else {
+    initMeetPlaceSlide();
+    goTo('4m');
+  }
 }
 
 // ── Meeting Place Slide (4m) ──────────────────────────────────────────────────
@@ -936,49 +945,99 @@ function renderInvite(){
   const meta=catMeta[state.category];
   const isMovie=state.category==='movie';
   const isFood=state.category==='food';
-  const h=(isMovie||isFood) ? 800 : 720;
-  svg.setAttribute('viewBox',`0 0 400 ${h}`);
 
-  const rows = [
-    { label:'WHEN', value:dateStr },
-    { label:'TIME', value:state.selectedTime },
-    ...(state.selMeetPlace ? [{ label:'MEET AT', value:state.selMeetPlace.name }] : []),
-    ...(isFood && state.selFoodItem ? [{ label:'WHAT WE\'RE EATING', value:state.selFoodItem.name }] : []),
-    { label:meta.label, value:state.selA?.name||'' },
-    ...(isMovie && state.selB ? [{ label:'CINEMA', value:state.selB.name }] : []),
+  // Bottom section rows (below the perforation) — no MEET AT for movie since cinema covers location
+  const bottomRows=[
+    ...(state.selMeetPlace && state.category!=='movie' ?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
+    ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
+    {label:meta.label,value:state.selA?.name||''},
+    ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
   ];
 
-  const cardH=72, gap=12, startY=225;
-  let cardsHTML='';
-  rows.forEach((row,i)=>{
-    const y=startY+(cardH+gap)*i;
-    cardsHTML+=`
-      <rect x="55" y="${y}" width="290" height="${cardH}" rx="16" fill="#ffffff" stroke="#e9d9d4"/>
-      <text x="78" y="${y+26}" font-family="Outfit,sans-serif" font-size="10" letter-spacing="2" fill="#b9826f" font-weight="700">${row.label}</text>
-      <text x="78" y="${y+52}" font-family="Fraunces,serif" font-size="13.5" fill="#3a1f2b" font-weight="600">${row.value}</text>`;
+  const W=400, pad=12, nr=15;
+  const topH=206;              // taller top to give heart+title room
+  const divY=pad+topH;
+  const rowH=54, rowGap=0;
+  const rowsH=bottomRows.length*(rowH+rowGap);
+  const H=pad+topH+nr*2+16+rowsH+64+pad;
+  const postDivY=divY+nr*2+14;
+
+  let rowsHTML='';
+  bottomRows.forEach((row,i)=>{
+    const y=postDivY+i*rowH;
+    const isLast=i===bottomRows.length-1;
+    rowsHTML+=`
+      <text x="34" y="${y+15}" font-family="Outfit,sans-serif" font-size="8.5" letter-spacing="2" fill="#b9826f" font-weight="700">${row.label}</text>
+      <text x="34" y="${y+38}" font-family="Fraunces,serif" font-size="15" fill="#3a1f2b" font-weight="600">${row.value}</text>
+      ${!isLast?`<line x1="34" y1="${y+rowH-1}" x2="${W-34}" y2="${y+rowH-1}" stroke="#f0e8e4" stroke-width="1"/>`:''}`;
   });
 
-  const footerY=startY+(cardH+gap)*rows.length+20;
+  const bcY=postDivY+rowsH+14;
+  const bcWidths=[3,1,2,1,3,2,1,2,1,3,1,2,1,2,3,1,2,1,2,1,3,1,2,2,1];
+  const bcTotalW=bcWidths.reduce((a,w)=>a+w*2.8+2,0);
+  let bcHTML=''; let bx=(W-bcTotalW)/2;
+  bcWidths.forEach((w,i)=>{ if(i%2===0){ bcHTML+=`<rect x="${bx.toFixed(1)}" y="${bcY}" width="${(w*2.8).toFixed(1)}" height="18" fill="#ddd0cc" rx="0.5"/>`; } bx+=w*2.8+2; });
 
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.innerHTML=`
-    <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fdf3ee"/><stop offset="100%" stop-color="#f6e0da"/>
-    </linearGradient></defs>
-    <rect width="400" height="${h}" fill="url(#bg)"/>
-    <circle cx="370" cy="40" r="70" fill="#f0c9ce" opacity="0.5"/>
-    <circle cx="20" cy="${h-30}" r="90" fill="#e8604c" opacity="0.10"/>
-    <text x="200" y="56" text-anchor="middle" font-family="Outfit,sans-serif" font-size="11" letter-spacing="3" fill="#e8604c" font-weight="700">SAVE THE DATE</text>
-    <g transform="translate(200,118)">
-      <circle r="40" fill="#fff" stroke="#f0c9ce" stroke-width="2"/>
-      <path d="M0 14C-8 8-14 2-14-5c0-5 4-9 9-9 2.6 0 4.7 1.1 5 3.5.3-2.4 2.4-3.5 5-3.5 5 0 9 4 9 9 0 7-6 13-14 19Z" fill="#e8604c"/>
+    <defs>
+      <linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#fdf3ee"/><stop offset="100%" stop-color="#eed4cc"/>
+      </linearGradient>
+      <clipPath id="topCl"><rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${topH}" rx="14"/></clipPath>
+      <clipPath id="fullCl"><rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${H-pad*2}" rx="14"/></clipPath>
+    </defs>
+
+    <!-- Shadow -->
+    <rect x="${pad+3}" y="${pad+5}" width="${W-pad*2}" height="${H-pad*2}" rx="15" fill="rgba(58,31,43,0.09)"/>
+
+    <!-- Full white ticket -->
+    <rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${H-pad*2}" rx="14" fill="#fff" stroke="#e8d5d0" stroke-width="1.5"/>
+
+    <!-- Top gradient fill -->
+    <g clip-path="url(#topCl)">
+      <rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${topH}" fill="url(#tg)"/>
+      <circle cx="355" cy="28" r="52" fill="#f0c9ce" opacity="0.4"/>
     </g>
-    <text x="200" y="188" text-anchor="middle" font-family="Fraunces,serif" font-size="20" font-weight="600" fill="#3a1f2b">Date with Chezy papa</text>
-    <text x="200" y="210" text-anchor="middle" font-family="Outfit,sans-serif" font-size="12" fill="#b9826f">${cat.name} Date ${meta.emoji}</text>
-    ${cardsHTML}
-    <text x="200" y="${footerY}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="11" fill="#c2acb3">can't wait 💕</text>`;
+
+    <!-- Heart circle — extra space below the top edge -->
+    <circle cx="${W/2}" cy="${pad+52}" r="28" fill="#fff" stroke="#f0c9ce" stroke-width="1.5"/>
+    <path d="M${W/2} ${pad+64}c-5.5-6.5-10-12-10-17.5 0-3.4 2.7-6 6-6 1.8 0 3.3.8 4 2.4.7-1.6 2.2-2.4 4-2.4 3.3 0 6 2.6 6 6 0 5.5-4.5 11-10 17.5Z" fill="#e8604c"/>
+
+    <!-- Title — 20px below heart bottom (pad+52+28+20 = pad+100) -->
+    <text x="${W/2}" y="${pad+100}" text-anchor="middle" font-family="Fraunces,serif" font-size="16" font-weight="600" fill="#3a1f2b">Date with Chezy papa</text>
+    <text x="${W/2}" y="${pad+118}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" fill="#c08878">${cat.name} Date ${meta.emoji}</text>
+
+    <!-- Divider inside top section -->
+    <line x1="${pad+22}" y1="${pad+130}" x2="${W-pad-22}" y2="${pad+130}" stroke="#e9d9d4" stroke-width="1"/>
+
+    <!-- WHEN (left) + TIME (right) -->
+    <text x="${pad+22}" y="${pad+144}" font-family="Outfit,sans-serif" font-size="8" letter-spacing="2" fill="#b9826f" font-weight="700">WHEN</text>
+    <text x="${W-pad-22}" y="${pad+144}" text-anchor="end" font-family="Outfit,sans-serif" font-size="8" letter-spacing="2" fill="#b9826f" font-weight="700">TIME</text>
+    <text x="${pad+22}" y="${pad+167}" font-family="Fraunces,serif" font-size="12.5" fill="#3a1f2b" font-weight="600">${dateStr}</text>
+    <text x="${W-pad-22}" y="${pad+167}" text-anchor="end" font-family="Fraunces,serif" font-size="14" fill="#3a1f2b" font-weight="600">${state.selectedTime}</text>
+
+    <!-- Vertical separator between WHEN and TIME -->
+    <line x1="${W/2}" y1="${pad+136}" x2="${W/2}" y2="${pad+174}" stroke="#e9d9d4" stroke-width="1"/>
+
+    <!-- TEAR HERE accent line -->
+    <line x1="${pad+22}" y1="${pad+185}" x2="${W-pad-22}" y2="${pad+185}" stroke="#e8604c" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.3"/>
+    <text x="${W/2}" y="${pad+198}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="8" letter-spacing="1.5" fill="#e8604c" opacity="0.6" font-weight="600">✂ TEAR HERE ✂</text>
+
+    <!-- Notch circles -->
+    <circle cx="${pad}" cy="${divY+nr}" r="${nr}" fill="#fff"/>
+    <circle cx="${W-pad}" cy="${divY+nr}" r="${nr}" fill="#fff"/>
+    <line x1="${pad+nr+4}" y1="${divY+nr}" x2="${W-pad-nr-4}" y2="${divY+nr}" stroke="#d4c4bf" stroke-dasharray="5,4" stroke-width="1.2"/>
+
+    <!-- Bottom rows -->
+    ${rowsHTML}
+
+    <!-- Barcode -->
+    ${bcHTML}
+    <text x="${W/2}" y="${bcY+34}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" fill="#c2acb3">can't wait 💕</text>`;
 }
 
-// ── Canvas for download/share ─────────────────────────────────────────────────
+// ── Canvas for download/share (ticket style) ──────────────────────────────────
 function buildCanvas(){
   const dateObj=new Date(state.selectedDate.y,state.selectedDate.m,state.selectedDate.d);
   const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -986,7 +1045,21 @@ function buildCanvas(){
   const meta=catMeta[state.category];
   const cat=categories.find(c=>c.id===state.category);
   const isFood=state.category==='food';
-  const W=800, H=(isMovie||isFood)?1560:1420;
+
+  const bottomRows=[
+    ...(state.selMeetPlace && state.category!=='movie' ?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
+    ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
+    {label:meta.label,value:state.selA?.name||''},
+    ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
+  ];
+
+  const W=800, pad=30, nr=30;
+  const topH=412, rowH=108, rowGap=0;
+  const divY=pad+topH;
+  const rowsH=bottomRows.length*(rowH+rowGap);
+  const H=pad+topH+nr*2+32+rowsH+128+pad;
+  const postDivY=divY+nr*2+28;
+
   const canvas=document.createElement('canvas');
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -998,52 +1071,103 @@ function buildCanvas(){
     ctx.closePath();
   }
 
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#fdf3ee'); g.addColorStop(1,'#f6e0da');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#f6ede9'; ctx.fillRect(0,0,W,H);
 
-  ctx.fillStyle='rgba(240,201,206,0.5)'; ctx.beginPath(); ctx.arc(740,80,140,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(232,96,76,0.1)'; ctx.beginPath(); ctx.arc(40,H-60,180,0,Math.PI*2); ctx.fill();
+  ctx.save();
+  ctx.shadowColor='rgba(58,31,43,0.18)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
+  rr(pad,pad,W-pad*2,H-pad*2,28);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.restore();
 
-  ctx.fillStyle='#e8604c'; ctx.font='700 22px Outfit,sans-serif'; ctx.textAlign='center';
-  ctx.fillText('S A V E   T H E   D A T E',W/2,120);
+  rr(pad,pad,W-pad*2,H-pad*2,28);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.strokeStyle='#e8d5d0'; ctx.lineWidth=3; ctx.stroke();
 
+  ctx.save();
+  rr(pad,pad,W-pad*2,topH,28);
+  ctx.clip();
+  const tg=ctx.createLinearGradient(0,0,W,topH);
+  tg.addColorStop(0,'#fdf3ee'); tg.addColorStop(1,'#eed4cc');
+  ctx.fillStyle=tg; ctx.fillRect(pad,pad,W-pad*2,topH);
+  ctx.fillStyle='rgba(240,201,206,0.4)'; ctx.beginPath(); ctx.arc(710,56,104,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Heart circle — extra padding from top
   ctx.fillStyle='#fff'; ctx.strokeStyle='#f0c9ce'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.arc(W/2,250,80,0,Math.PI*2); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.translate(W/2,250); ctx.scale(1.8,1.8); ctx.fillStyle='#e8604c';
+  ctx.beginPath(); ctx.arc(W/2,pad+104,52,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(W/2,pad+104); ctx.scale(1.8,1.8); ctx.fillStyle='#e8604c';
   ctx.beginPath(); ctx.moveTo(0,16);
   ctx.bezierCurveTo(-9,9,-16,2,-16,-6); ctx.bezierCurveTo(-16,-12,-11.5,-16.5,-6,-16.5);
   ctx.bezierCurveTo(-3,-16.5,-0.6,-15.2,0,-12.5); ctx.bezierCurveTo(0.6,-15.2,3,-16.5,6,-16.5);
   ctx.bezierCurveTo(11.5,-16.5,16,-12,16,-6); ctx.bezierCurveTo(16,2,9,9,0,16);
   ctx.closePath(); ctx.fill(); ctx.restore();
 
-  ctx.fillStyle='#3a1f2b'; ctx.font='600 40px Fraunces,serif'; ctx.fillText('Date with Chezy papa',W/2,380);
-  ctx.fillStyle='#b9826f'; ctx.font='600 22px Outfit,sans-serif'; ctx.fillText(`${cat.name} Date ${meta.emoji}`,W/2,415);
+  // Title — 20px gap below heart bottom (pad+104+52+20 = pad+176)
+  ctx.fillStyle='#3a1f2b'; ctx.font='600 31px Fraunces,serif'; ctx.textAlign='center';
+  ctx.fillText('Date with Chezy papa',W/2,pad+200);
+  ctx.fillStyle='#c08878'; ctx.font='500 20px Outfit,sans-serif';
+  ctx.fillText(`${cat.name} Date ${meta.emoji}`,W/2,pad+232);
 
-  const rows=[
-    { label:'WHEN', value:dateStr },
-    { label:'TIME', value:state.selectedTime },
-    ...(state.selMeetPlace?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
-    ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
-    { label:meta.label, value:state.selA?.name||'' },
-    ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
-  ];
+  ctx.strokeStyle='#e9d9d4'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(pad+44,pad+260); ctx.lineTo(W-pad-44,pad+260); ctx.stroke();
 
-  let y=460;
-  rows.forEach(row=>{
-    rr(110,y,580,150,30); ctx.fillStyle='#fff'; ctx.fill();
-    ctx.strokeStyle='#e9d9d4'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.textAlign='left'; ctx.fillStyle='#b9826f'; ctx.font='700 20px Outfit,sans-serif';
-    ctx.fillText(row.label,150,y+48);
-    ctx.fillStyle='#3a1f2b'; ctx.font='600 30px Fraunces,serif';
-    ctx.fillText(row.value,150,y+102);
-    y+=166;
+  ctx.textAlign='left'; ctx.fillStyle='#b9826f'; ctx.font='700 17px Outfit,sans-serif';
+  ctx.fillText('WHEN',pad+44,pad+286);
+  ctx.textAlign='right'; ctx.fillText('TIME',W-pad-44,pad+286);
+  ctx.textAlign='left'; ctx.fillStyle='#3a1f2b'; ctx.font='600 25px Fraunces,serif';
+  ctx.fillText(dateStr,pad+44,pad+320);
+  ctx.textAlign='right'; ctx.font='600 27px Fraunces,serif';
+  ctx.fillText(state.selectedTime,W-pad-44,pad+320);
+
+  ctx.strokeStyle='#e9d9d4'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(W/2,pad+272); ctx.lineTo(W/2,pad+334); ctx.stroke();
+
+  ctx.strokeStyle='rgba(232,96,76,0.3)'; ctx.lineWidth=3;
+  ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(pad+44,pad+372); ctx.lineTo(W-pad-44,pad+372); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.textAlign='center'; ctx.fillStyle='rgba(232,96,76,0.55)'; ctx.font='700 14px Outfit,sans-serif';
+  ctx.fillText('✂  TEAR HERE  ✂',W/2,pad+396);
+
+  ctx.globalCompositeOperation='destination-out';
+  ctx.fillStyle='rgba(0,0,0,1)';
+  ctx.beginPath(); ctx.arc(pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W-pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+
+  ctx.fillStyle='#f6ede9';
+  ctx.beginPath(); ctx.arc(pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W-pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle='#d4c4bf'; ctx.lineWidth=2.5;
+  ctx.setLineDash([10,8]);
+  ctx.beginPath(); ctx.moveTo(pad+nr+8,divY+nr); ctx.lineTo(W-pad-nr-8,divY+nr); ctx.stroke();
+  ctx.setLineDash([]);
+
+  bottomRows.forEach((row,i)=>{
+    const y=postDivY+i*rowH;
+    ctx.textAlign='left'; ctx.fillStyle='#b9826f'; ctx.font='700 17px Outfit,sans-serif';
+    ctx.fillText(row.label,pad+44,y+24);
+    ctx.fillStyle='#3a1f2b'; ctx.font='600 28px Fraunces,serif';
+    ctx.fillText(row.value,pad+44,y+64);
+    if(i<bottomRows.length-1){
+      ctx.strokeStyle='#f0e8e4'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(pad+44,y+rowH-4); ctx.lineTo(W-pad-44,y+rowH-4); ctx.stroke();
+    }
   });
 
+  const bcY=postDivY+rowsH+28;
+  const bw=[3,1,2,1,3,2,1,2,1,3,1,2,1,2,3,1,2,1,2,1,3,1,2,2,1];
+  const bTotalW=bw.reduce((a,w)=>a+w*5.6+4,0);
+  let bx=(W-bTotalW)/2;
+  ctx.fillStyle='#ddd0cc';
+  bw.forEach((w,i)=>{ if(i%2===0){ ctx.fillRect(bx,bcY,w*5.6,36); } bx+=w*5.6+4; });
+
   ctx.textAlign='center'; ctx.fillStyle='#c2acb3'; ctx.font='400 20px Outfit,sans-serif';
-  ctx.fillText("can't wait 💕",W/2,H-60);
+  ctx.fillText("can't wait 💕",W/2,bcY+66);
   return canvas;
 }
+
 
 function withFonts(cb){
   if(document.fonts&&document.fonts.ready){
