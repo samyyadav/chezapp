@@ -452,6 +452,9 @@
   <footer class="note">made with a little bit of butterflies</footer>
 </div>
 
+<!-- Confetti overlay -->
+<canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;display:none;"></canvas>
+
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -1035,6 +1038,9 @@ function renderInvite(){
     <!-- Barcode -->
     ${bcHTML}
     <text x="${W/2}" y="${bcY+34}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" fill="#c2acb3">can't wait 💕</text>`;
+
+  // 🎉 Confetti burst once the card is ready
+  setTimeout(launchConfetti, 120);
 }
 
 // ── Canvas for download/share (ticket style) ──────────────────────────────────
@@ -1168,6 +1174,156 @@ function buildCanvas(){
   return canvas;
 }
 
+
+// ── Confetti ──────────────────────────────────────────────────────────────────
+function launchConfetti(){
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  const colors = ['#e8604c','#f0c9ce','#d9a441','#3a1f2b','#f7e3df','#c08878','#ffffff','#ffb347','#ff6b9d'];
+  const shapes = ['rect','ribbon','circle','heart','dot'];
+
+  const GRAVITY = 0.38;
+  const DRAG    = 0.985;
+  const pieces  = [];
+
+  // ── Spawn two staggered bursts (like two cannons) ──────────────────────────
+  function spawnBurst(count, angleMin, angleMax, speedMin, speedMax, delay){
+    setTimeout(()=>{
+      for(let i = 0; i < count; i++){
+        const angle   = angleMin + Math.random() * (angleMax - angleMin);
+        const speed   = speedMin + Math.random() * (speedMax - speedMin);
+        const color   = colors[Math.floor(Math.random() * colors.length)];
+        const shape   = shapes[Math.floor(Math.random() * shapes.length)];
+        const w       = shape === 'ribbon' ? 3 + Math.random() * 4 : 5 + Math.random() * 6;
+        const h       = shape === 'ribbon' ? 12 + Math.random() * 10 : w;
+
+        pieces.push({
+          x:      cx + (Math.random() - 0.5) * 20,
+          y:      cy + (Math.random() - 0.5) * 20,
+          vx:     Math.cos(angle) * speed,
+          vy:     Math.sin(angle) * speed,
+          w, h,
+          color,
+          shape,
+          rotation:  Math.random() * Math.PI * 2,
+          rotSpeed:  (Math.random() - 0.5) * 0.35,
+          opacity:   1,
+          wobble:    Math.random() * Math.PI * 2,
+          wobbleSpd: 0.08 + Math.random() * 0.06,
+          dead:      false,
+        });
+      }
+    }, delay);
+  }
+
+  // First burst — full 360°, fast & wide
+  spawnBurst(120, 0, Math.PI * 2, 8, 22, 0);
+  // Second burst — slightly delayed, more upward bias
+  spawnBurst(80, -Math.PI * 1.1, -Math.PI * 0.1 + 0.3, 10, 20, 80);
+  // Third pop — small burst for extra fullness
+  spawnBurst(50, 0, Math.PI * 2, 5, 14, 180);
+
+  // ── Heart path helper ────────────────────────────────────────────────────
+  function drawHeart(ctx, size){
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.3);
+    ctx.bezierCurveTo(-size * 0.5, -size * 0.1, -size, size * 0.5, 0, size);
+    ctx.bezierCurveTo(size, size * 0.5, size * 0.5, -size * 0.1, 0, size * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── Particle rendering ───────────────────────────────────────────────────
+  function renderPiece(p){
+    ctx.save();
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle   = p.color;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+
+    // squish effect: simulate tumbling by scaling on wobble
+    const scaleX = Math.abs(Math.cos(p.wobble)) * 0.6 + 0.4;
+    ctx.scale(scaleX, 1);
+
+    switch(p.shape){
+      case 'rect':
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        break;
+      case 'ribbon':
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        break;
+      case 'circle':
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'dot':
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'heart':
+        drawHeart(ctx, p.w * 0.55);
+        break;
+    }
+
+    // subtle shine strip on rectangles/ribbons
+    if(p.shape === 'rect' || p.shape === 'ribbon'){
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w * 0.35, p.h);
+    }
+
+    ctx.restore();
+  }
+
+  // ── Physics update ────────────────────────────────────────────────────────
+  function updatePiece(p){
+    p.vy     += GRAVITY;
+    p.vx     *= DRAG;
+    p.vy     *= DRAG;
+    p.x      += p.vx;
+    p.y      += p.vy;
+    p.rotation += p.rotSpeed;
+    p.wobble   += p.wobbleSpd;
+
+    // Fade out when falling below 80% of screen height or barely moving
+    const slow = Math.abs(p.vx) < 0.3 && Math.abs(p.vy) < 0.3;
+    if(p.y > canvas.height * 0.82 || slow){
+      p.opacity -= 0.025;
+    }
+    if(p.opacity <= 0 || p.y > canvas.height + 30) p.dead = true;
+  }
+
+  // ── Main loop ─────────────────────────────────────────────────────────────
+  let running = true;
+  function loop(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for(let i = pieces.length - 1; i >= 0; i--){
+      if(pieces[i].dead){ pieces.splice(i, 1); continue; }
+      updatePiece(pieces[i]);
+      renderPiece(pieces[i]);
+    }
+
+    if(running && pieces.length > 0){
+      requestAnimationFrame(loop);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'none';
+      running = false;
+    }
+  }
+
+  // Start loop once first burst arrives
+  setTimeout(loop, 10);
+}
 
 function withFonts(cb){
   if(document.fonts&&document.fonts.ready){
