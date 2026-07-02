@@ -316,6 +316,33 @@
     </div>
   </div>
 
+  <!-- SLIDE 4M: MEETING PLACE (all categories) -->
+  <div class="slide" id="slide-4m">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6-5.7-6-10.5a6 6 0 0112 0C18 15.3 12 21 12 21Z" stroke="#e8604c" stroke-width="1.6"/><circle cx="12" cy="10.5" r="2.2" stroke="#e8604c" stroke-width="1.6"/></svg>
+        meeting spot
+      </div>
+      <h1>Where shall we meet?</h1>
+      <p class="sub">Pick a spot to start our date from.</p>
+      <div class="opt-grid" id="meetplace-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('meetplace-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="#e8604c" stroke-width="2" stroke-linecap="round"/></svg>
+          Somewhere else? Type your own
+        </button>
+        <div class="custom-slide" id="meetplace-custom">
+          <input type="text" class="custom-input" id="custom-meetplace-input" maxlength="40" placeholder="e.g. My place" oninput="onCustomMeetPlace()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(4)">Back</button>
+        <button class="btn-primary" id="meetplace-next-btn" disabled onclick="onMeetPlaceNext()">Continue</button>
+      </div>
+      <div class="progress" id="dots-4m"></div>
+    </div>
+  </div>
+
   <!-- SLIDE 4B: FOOD ITEM (Food category only) -->
   <div class="slide" id="slide-4b">
     <div class="card">
@@ -336,8 +363,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn-secondary" onclick="goTo(4)">Back</button>
-        <button class="btn-primary" id="fooditem-next-btn" disabled onclick="goTo(5)">Continue</button>
+        <button class="btn-secondary" onclick="goTo('4m')">Back</button>
       </div>
       <div class="progress" id="dots-4b"></div>
     </div>
@@ -360,7 +386,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn-secondary" id="s5-back-btn" onclick="goTo(state.category==='food'?'4b':4)">Back</button>
+        <button class="btn-secondary" id="s5-back-btn" onclick="goTo(state.category==='food'?'4b':'4m')">Back</button>
         <button class="btn-primary" id="s5-next-btn" disabled onclick="nextFromS5()">Continue</button>
       </div>
       <div class="progress" id="dots-5"></div>
@@ -434,6 +460,7 @@ const state = {
   selA: null,   // slide 5 selection (place/destination/movie/topic)
   selB: null,   // slide 6 selection (cinema, MOVIE only)
   selFoodItem: null, // food item selection (Food category only)
+  selMeetPlace: null, // meeting place (all categories)
 };
 
 // ── Categories ────────────────────────────────────────────────────────────────
@@ -522,8 +549,8 @@ const s5Config = {
 
 // ── Cinema options (MOVIE slide 6) ────────────────────────────────────────────
 const cinemas = [
-  { name:'PVR Preston', icon:`<rect x="2" y="6" width="20" height="14" rx="2" stroke="#e8604c" stroke-width="1.6"/><path d="M7 6V2M17 6V2M2 12h20" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round"/>` },
-  { name:'Asian M Cube Mall', icon:`<rect x="3" y="7" width="18" height="13" rx="2" stroke="#e8604c" stroke-width="1.6"/><path d="M8 7V4M16 7V4" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round"/>` },
+  { name:'PVR', icon:`<rect x="2" y="6" width="20" height="14" rx="2" stroke="#e8604c" stroke-width="1.6"/><path d="M7 6V2M17 6V2M2 12h20" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round"/>` },
+  { name:'INOX', icon:`<rect x="3" y="7" width="18" height="13" rx="2" stroke="#e8604c" stroke-width="1.6"/><path d="M8 7V4M16 7V4" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round"/>` },
   { name:'Cinepolis', icon:`<path d="M2 8h20v11a2 2 0 01-2 2H4a2 2 0 01-2-2V8ZM2 8l10-5 10 5" stroke="#e8604c" stroke-width="1.6" stroke-linejoin="round"/>` },
   { name:'Drive-in', icon:`<path d="M5 17H3v-4l2-5h14l2 5v4h-2M5 17h14M7 17a2 2 0 104 0M13 17a2 2 0 104 0" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
 ];
@@ -540,28 +567,22 @@ const foodItems = [
 
 // ── Total steps per category (used for dots) ──────────────────────────────────
 function totalSteps(){
-  if(state.category==='movie') return 7;
-  if(state.category==='food') return 7; // extra food-item step
-  return 6;
+  if(state.category==='movie') return 8; // 1,2,3,4,4m,5,6,7
+  if(state.category==='food') return 8;  // 1,2,3,4,4m,4b,5,7
+  return 7; // 1,2,3,4,4m,5,7
 }
 
 // ── Progress dots ─────────────────────────────────────────────────────────────
-// Map slide id to step number for dot highlighting
-const slideStepMap = {
-  '1':1, '2':2, '3':3, '4':4, '4b':5, '5':5, '6':6, '7':7
-};
 function renderDots(slideNum){
   const total = totalSteps();
-  // for food: 4b=5, 5=6, final=7
-  // for movie: 5=5, 6=6, final=7
-  // for others: 5=5, final=6
-  let step;
   const key = String(slideNum);
+  let step;
   if(key==='7') step = total;
-  else if(key==='4b') step = 5;
+  else if(key==='4m') step = 5;
+  else if(key==='4b') step = 6;
   else if(key==='5'){
-    step = state.category==='food' ? 6 : 5;
-  } else if(key==='6') step = state.category==='movie' ? 6 : 5;
+    step = state.category==='food' ? 7 : 6;
+  } else if(key==='6') step = 7;
   else step = parseInt(key);
 
   const el = document.getElementById('dots-' + slideNum);
@@ -604,6 +625,7 @@ function selectCategory(id, card){
   state.selA = null;
   state.selB = null;
   state.selFoodItem = null;
+  state.selMeetPlace = null;
   document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
   document.getElementById('cat-next-btn').disabled = false;
@@ -700,8 +722,58 @@ function onCustomTime(){
   }
 }
 
-// Time next: go to food-item slide for Food category, else slide 5
+// Time next: always go to meeting place slide
 function onTimeNext(){
+  initMeetPlaceSlide();
+  goTo('4m');
+}
+
+// ── Meeting Place Slide (4m) ──────────────────────────────────────────────────
+const meetPlaces = [
+  { name:'Home', icon:`<path d="M3 12L12 3l9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+  { name:'Coffee Shop', icon:`<path d="M4 9h13v4a5 5 0 01-5 5H9a5 5 0 01-5-5V9Z" stroke="#e8604c" stroke-width="1.6"/><path d="M17 10h1.5a2.5 2.5 0 010 5H17" stroke="#e8604c" stroke-width="1.6"/>` },
+  { name:'Park', icon:`<path d="M12 2C8 2 5 7 5 11c0 5 4 8 7 11 3-3 7-6 7-11 0-4-3-9-7-9Z" stroke="#e8604c" stroke-width="1.6"/><path d="M12 21v-8M9 15l3-3 3 3" stroke="#e8604c" stroke-width="1.4" stroke-linecap="round"/>` },
+  { name:'Restaurant', icon:`<path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="#e8604c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+];
+
+let meetPlaceBuilt = false;
+function initMeetPlaceSlide(){
+  if(meetPlaceBuilt) return;
+  meetPlaceBuilt = true;
+  const grid=document.getElementById('meetplace-grid');
+  meetPlaces.forEach(p=>{
+    const card=document.createElement('div');
+    card.className='opt-card';
+    card.setAttribute('tabindex','0');
+    card.innerHTML=`<svg viewBox="0 0 24 24" fill="none">${p.icon}</svg><div class="opt-name">${p.name}</div>`;
+    card.onclick=()=>selectMeetPlace(p,card);
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectMeetPlace(p,card);}};
+    grid.appendChild(card);
+  });
+}
+
+function selectMeetPlace(p,card){
+  state.selMeetPlace=p;
+  document.querySelectorAll('#meetplace-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-meetplace-input').value='';
+  document.getElementById('meetplace-next-btn').disabled=false;
+}
+
+function onCustomMeetPlace(){
+  const val=document.getElementById('custom-meetplace-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('#meetplace-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+    state.selMeetPlace={name:val};
+    document.getElementById('meetplace-next-btn').disabled=false;
+  } else if(!document.querySelector('#meetplace-grid .opt-card.selected')){
+    state.selMeetPlace=null;
+    document.getElementById('meetplace-next-btn').disabled=true;
+  }
+}
+
+function onMeetPlaceNext(){
+  if(!state.selMeetPlace) return;
   if(state.category==='food'){
     initFoodItemSlide();
     goTo('4b');
@@ -864,12 +936,13 @@ function renderInvite(){
   const meta=catMeta[state.category];
   const isMovie=state.category==='movie';
   const isFood=state.category==='food';
-  const h=(isMovie||isFood) ? 720 : 640;
+  const h=(isMovie||isFood) ? 800 : 720;
   svg.setAttribute('viewBox',`0 0 400 ${h}`);
 
   const rows = [
     { label:'WHEN', value:dateStr },
     { label:'TIME', value:state.selectedTime },
+    ...(state.selMeetPlace ? [{ label:'MEET AT', value:state.selMeetPlace.name }] : []),
     ...(isFood && state.selFoodItem ? [{ label:'WHAT WE\'RE EATING', value:state.selFoodItem.name }] : []),
     { label:meta.label, value:state.selA?.name||'' },
     ...(isMovie && state.selB ? [{ label:'CINEMA', value:state.selB.name }] : []),
@@ -913,7 +986,7 @@ function buildCanvas(){
   const meta=catMeta[state.category];
   const cat=categories.find(c=>c.id===state.category);
   const isFood=state.category==='food';
-  const W=800, H=(isMovie||isFood)?1400:1260;
+  const W=800, H=(isMovie||isFood)?1560:1420;
   const canvas=document.createElement('canvas');
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -950,6 +1023,7 @@ function buildCanvas(){
   const rows=[
     { label:'WHEN', value:dateStr },
     { label:'TIME', value:state.selectedTime },
+    ...(state.selMeetPlace?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
     ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
     { label:meta.label, value:state.selA?.name||'' },
     ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
