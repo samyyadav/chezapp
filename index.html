@@ -439,6 +439,15 @@
       <h1>What kind of date?</h1>
       <p class="sub">Pick one and we'll plan it around it.</p>
       <div class="cat-grid" id="cat-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('cat-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Something else? Type your own
+        </button>
+        <div class="custom-slide" id="cat-custom">
+          <input type="text" class="custom-input" id="custom-cat-input" maxlength="30" placeholder="e.g. Picnic, Game night" oninput="onCustomCategory()" />
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn-secondary" onclick="goTo(1)">Back</button>
         <button class="btn-primary" id="cat-next-btn" disabled onclick="goTo(3)">Continue</button>
@@ -647,7 +656,8 @@
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
-  category: null,   // 'food' | 'ride' | 'movie' | 'time'
+  category: null,   // 'food' | 'ride' | 'movie' | 'time' | 'custom'
+  customCategoryLabel: null, // free-text label when category === 'custom'
   selectedDate: null,
   selectedTime: null,
   selA: null,   // slide 5 selection (place/destination/movie/topic)
@@ -655,6 +665,13 @@ const state = {
   selFoodItem: null, // food item selection (Food category only)
   selMeetPlace: null, // meeting place (all categories)
 };
+
+// Display name for the current category, handling the free-text custom case
+function currentCategoryName(){
+  if(state.category === 'custom') return state.customCategoryLabel || 'Our Date';
+  const c = categories.find(x => x.id === state.category);
+  return c ? c.name : '';
+}
 
 // ── Pride palette cycled across generated option cards for a funky rainbow feel ──
 const prideColors = ['#e40303','#ff8c00','#00c2b8','#008026','#0060ff','#8a2be2'];
@@ -740,6 +757,21 @@ const s5Config = {
       { name:'Future Plans', icon:`<path d="M3 12h18M12 3l9 9-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
       { name:'Memories', icon:`<path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78Z" stroke="currentColor" stroke-width="1.6"/>` },
       { name:'Deep Talk', icon:`<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` },
+    ],
+  },
+  custom: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg> the details`,
+    title:'What shall we do together?',
+    sub:'Pick a vibe to go with it.',
+    customLabel:'Something else? Type it',
+    customPlaceholder:'e.g. Surprise me',
+    nextLabel:'See our date card',
+    goNext: () => { renderInvite(); goTo(7); },
+    options:[
+      { name:'Adventure', icon:`<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M15 9l-2 6-6 2 2-6 6-2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` },
+      { name:'Surprise Me', icon:`<rect x="3" y="8" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 8v13" stroke="currentColor" stroke-width="1.6"/><path d="M12 8c-2-4-6-4-6-1s3 1 6 1Zm0 0c2-4 6-4 6-1s-3 1-6 1Z" stroke="currentColor" stroke-width="1.4"/>` },
+      { name:'Chill Vibes', icon:`<path d="M9 18V5l11-2v13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="16" r="3" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Something New', icon:`<path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` },
     ],
   },
 };
@@ -849,6 +881,7 @@ function initCategories(){
 
 function selectCategory(id, card){
   state.category = id;
+  state.customCategoryLabel = null;
   state.selA = null;
   state.selB = null;
   state.selFoodItem = null;
@@ -856,9 +889,39 @@ function selectCategory(id, card){
   document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
   document.getElementById('cat-next-btn').disabled = false;
+  // clear/collapse the custom category field since a preset was chosen
+  const catCustomInput = document.getElementById('custom-cat-input');
+  if(catCustomInput) catCustomInput.value = '';
+  const catCustomSlide = document.getElementById('cat-custom');
+  if(catCustomSlide) catCustomSlide.classList.remove('open');
   // pre-fill slide 5
   populateS5();
   // set final-back button target
+  setFinalBackHandler();
+}
+
+// Free-text "type your own" category on slide 2
+function onCustomCategory(){
+  const val = document.getElementById('custom-cat-input').value.trim();
+  if(val.length > 0){
+    document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
+    state.category = 'custom';
+    state.customCategoryLabel = val;
+    state.selA = null;
+    state.selB = null;
+    state.selFoodItem = null;
+    state.selMeetPlace = null;
+    document.getElementById('cat-next-btn').disabled = false;
+    populateS5();
+    setFinalBackHandler();
+  } else if(state.category === 'custom'){
+    state.category = null;
+    state.customCategoryLabel = null;
+    document.getElementById('cat-next-btn').disabled = true;
+  }
+}
+
+function setFinalBackHandler(){
   document.getElementById('final-back-btn').onclick = () => {
     if(state.category==='movie') goTo(6);
     else goTo(5);
@@ -1162,13 +1225,14 @@ const catMeta = {
   ride:  { label:'WHERE WE\'RE GOING',   emoji:'🚗' },
   movie: { label:'WHAT WE\'RE WATCHING', emoji:'🎬' },
   time:  { label:'WHAT WE\'RE DISCUSSING', emoji:'💬' },
+  custom:{ label:'WHAT WE\'RE DOING', emoji:'✨' },
 };
 
 function renderInvite(){
   const svg=document.getElementById('invite-svg');
   const dateObj=new Date(state.selectedDate.y, state.selectedDate.m, state.selectedDate.d);
   const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const cat=categories.find(c=>c.id===state.category);
+  const catName=currentCategoryName();
   const meta=catMeta[state.category];
   const isMovie=state.category==='movie';
   const isFood=state.category==='food';
@@ -1244,7 +1308,7 @@ function renderInvite(){
 
     <!-- Title — 20px below heart bottom (pad+52+28+20 = pad+100) -->
     <text x="${W/2}" y="${pad+100}" text-anchor="middle" font-family="Baloo 2,cursive" font-size="17" font-weight="700" fill="#241238">Date with Chezy papa</text>
-    <text x="${W/2}" y="${pad+118}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" font-weight="600" fill="#8a2be2">${cat.name} Date ${meta.emoji}</text>
+    <text x="${W/2}" y="${pad+118}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" font-weight="600" fill="#8a2be2">${catName} Date ${meta.emoji}</text>
 
     <!-- Divider inside top section -->
     <line x1="${pad+22}" y1="${pad+130}" x2="${W-pad-22}" y2="${pad+130}" stroke="#ecdbfb" stroke-width="1"/>
@@ -1284,7 +1348,7 @@ function buildCanvas(){
   const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const isMovie=state.category==='movie';
   const meta=catMeta[state.category];
-  const cat=categories.find(c=>c.id===state.category);
+  const catName=currentCategoryName();
   const isFood=state.category==='food';
 
   const bottomRows=[
@@ -1361,7 +1425,7 @@ function buildCanvas(){
   ctx.fillStyle='#241238'; ctx.font='700 31px "Baloo 2",cursive'; ctx.textAlign='center';
   ctx.fillText('Date with Chezy papa',W/2,pad+200);
   ctx.fillStyle='#8a2be2'; ctx.font='600 20px Outfit,sans-serif';
-  ctx.fillText(`${cat.name} Date ${meta.emoji}`,W/2,pad+232);
+  ctx.fillText(`${catName} Date ${meta.emoji}`,W/2,pad+232);
 
   ctx.strokeStyle='#ecdbfb'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(pad+44,pad+260); ctx.lineTo(W-pad-44,pad+260); ctx.stroke();
@@ -1597,10 +1661,1696 @@ function downloadInvite(){
 function shareToWhatsapp(){
   withFonts(()=>{
     const canvas=buildCanvas();
-    const cat=categories.find(c=>c.id===state.category);
+    const catName=currentCategoryName();
     const dateObj=new Date(state.selectedDate.y,state.selectedDate.m,state.selectedDate.d);
     const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    const msg=`Date with Chezy papa 💕 ${cat.name} date on ${dateStr} at ${state.selectedTime}. ${state.selA?.name||''}${state.selB?' @ '+state.selB.name:''}`;
+    const msg=`Date with Chezy papa 💕 ${catName} date on ${dateStr} at ${state.selectedTime}. ${state.selA?.name||''}${state.selB?' @ '+state.selB.name:''}`;
+    canvas.toBlob(async blob=>{
+      const file=new File([blob],'date-with-chezypapa.png',{type:'image/png'});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file],title:'Our Date Card',text:msg}); return; }catch(e){}
+      }
+      const url=canvas.toDataURL('image/png');
+      window.open(url,'_blank');
+      window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    },'image/png');
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initCategories();
+initCalendar();
+initTime();
+renderDots(1);
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CheZapp - Date app!</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+  :root{
+    --plum:#241238;
+    --blush:#fbe9ff;
+    --coral:#ff2fa1;
+    --gold:#ffd23f;
+    --cream:#fffaf0;
+    --ink:#241238;
+    --line: rgba(36,18,56,0.12);
+    --shadow: 0 20px 50px -20px rgba(107,33,168,0.45);
+
+    --p-red:#e40303;
+    --p-orange:#ff8c00;
+    --p-yellow:#00c2b8;
+    --p-green:#008026;
+    --p-blue:#0060ff;
+    --p-purple:#8a2be2;
+    --heart-a:#ff5470;
+    --heart-b:#c31432;
+    --love-gradient: linear-gradient(135deg, var(--heart-a), var(--heart-b));
+    --pride-gradient: linear-gradient(90deg, var(--p-red), var(--p-orange), var(--p-yellow), var(--p-green), var(--p-blue), var(--p-purple));
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:'Outfit', sans-serif;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(228,3,3,0.16) 0%, transparent 40%),
+      radial-gradient(circle at 85% 15%, rgba(255,237,0,0.18) 0%, transparent 42%),
+      radial-gradient(circle at 90% 85%, rgba(0,96,255,0.16) 0%, transparent 45%),
+      radial-gradient(circle at 15% 85%, rgba(138,43,226,0.18) 0%, transparent 45%),
+      radial-gradient(circle at 50% 50%, rgba(0,128,38,0.10) 0%, transparent 60%),
+      var(--cream);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    overflow-x:hidden;
+  }
+
+  .stage{ width:100%; max-width:480px; position:relative; z-index:1; }
+
+  /* Background: the couple's journey, ambient & minimal — hidden on small screens so it never crowds the card */
+  .bg-decor{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  .bg-icon{ position:absolute; color:var(--p-purple); opacity:.34; width:clamp(64px,13vw,124px); }
+  .bi-meet{ top:2%; left:2%; transform:rotate(-4deg); }
+  .bi-chat{ top:18%; left:1%; transform:rotate(3deg); color:var(--p-orange); }
+  .bi-bike{ top:36%; left:1%; transform:rotate(-3deg); color:var(--p-blue); }
+  .bi-marry{ top:58%; left:1%; transform:rotate(3deg); }
+  .bi-metro{ top:80%; left:1%; transform:rotate(-2deg); color:var(--p-green); }
+  .bi-engage{ top:2%; right:2%; transform:rotate(4deg); color:var(--heart-b); }
+  .bi-car{ top:27%; right:1%; transform:rotate(3deg); color:var(--p-green); }
+  .bi-home{ top:54%; right:1%; transform:rotate(-3deg); color:var(--heart-b); }
+  .bi-flight{ top:80%; right:1%; transform:rotate(6deg); color:var(--p-purple); }
+  .bi-beach{ top:1%; left:37%; transform:translateX(-50%) rotate(-3deg); color:var(--p-orange); }
+  .bi-mountains{ top:1%; left:63%; transform:translateX(-50%) rotate(3deg); color:var(--p-green); }
+  .bi-forest{ top:91%; left:37%; transform:translateX(-50%) rotate(-2deg); color:var(--p-green); }
+  .bi-road{ top:91%; left:63%; transform:translateX(-50%) rotate(2deg); color:var(--plum); }
+
+  .card{
+    background:#fff;
+    border-radius:28px;
+    box-shadow:var(--shadow);
+    padding:50px 36px 36px;
+    position:relative;
+    overflow:hidden;
+    border:1px solid var(--line);
+    animation:rise .6s cubic-bezier(.2,.8,.2,1);
+  }
+  .card::after{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:9px;
+    background:var(--pride-gradient);
+  }
+  @keyframes rise{
+    from{ opacity:0; transform:translateY(18px) scale(.98); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  .card::before{
+    content:"";
+    position:absolute;
+    top:-60px; right:-60px;
+    width:180px; height:180px;
+    background:conic-gradient(from 0deg, var(--p-red), var(--p-orange), var(--p-yellow), var(--p-green), var(--p-blue), var(--p-purple), var(--p-red));
+    opacity:0.14;
+    border-radius:50%;
+  }
+
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:12.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--p-purple);
+    font-weight:700;
+    margin-bottom:18px;
+    background:linear-gradient(90deg, var(--p-red), var(--p-purple));
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  .eyebrow svg{ width:14px; height:14px; color:var(--p-purple); -webkit-text-fill-color:initial; }
+
+  h1{ font-family:'Baloo 2',cursive; font-weight:700; font-size:33px; line-height:1.16; margin:0 0 10px; color:var(--plum); letter-spacing:-.01em; }
+  p.sub{ font-size:15px; color:#7a5c8c; margin:0 0 28px; line-height:1.5; }
+
+  .icon-row{ display:flex; justify-content:center; margin-bottom:6px; }
+  .icon-circle{
+    width:92px; height:92px;
+    border-radius:50%;
+    background:var(--love-gradient);
+    padding:4px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 22px -10px rgba(195,20,50,.55);
+    margin-bottom:8px;
+  }
+  .icon-circle svg{ width:40px; height:40px; background:#fff; border-radius:50%; padding:12px; box-sizing:border-box; color:var(--heart-b); }
+
+  .sender-tag{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    font-size:18px; font-weight:800; font-family:'Baloo 2',cursive; color:var(--heart-b); margin-bottom:14px;
+  }
+  .sender-tag svg{ flex:none; color:var(--heart-b); }
+
+  /* Buttons */
+  .btn-row{ display:flex; gap:12px; margin-top:8px; }
+  button{
+    font-family:'Outfit',sans-serif;
+    font-weight:600; font-size:15.5px;
+    border-radius:14px; border:none;
+    padding:15px 20px; cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    flex:1; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  button:focus-visible{ outline:3px solid var(--p-yellow); outline-offset:2px; }
+
+  .btn-yes{ background:var(--love-gradient); background-size:220% 100%; color:#fff; box-shadow:0 12px 24px -10px rgba(195,20,50,.55); text-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .btn-yes:hover{ transform:translateY(-2px) scale(1.01); }
+  .btn-yes:active{ transform:translateY(0); }
+  @keyframes shimmer{ 0%{ background-position:0% 50%; } 100%{ background-position:220% 50%; } }
+
+  .btn-no{ background:#f3edf7; color:#b9a6c9; cursor:not-allowed; }
+  .btn-no[disabled]{ opacity:.7; }
+  .btn-no .lock{ width:14px; height:14px; }
+
+  .btn-secondary{ background:transparent; color:var(--plum); border:1.5px solid var(--line); font-family:'Baloo 2',cursive; font-weight:600; }
+  .btn-secondary:hover{ background:var(--blush); border-color:var(--p-purple); }
+
+  .btn-primary{ background:linear-gradient(135deg, var(--p-blue), var(--p-purple)); color:#fff; box-shadow:0 12px 24px -10px rgba(138,43,226,.55); font-family:'Baloo 2',cursive; font-weight:600; }
+  .btn-primary:hover{ transform:translateY(-2px); }
+  .btn-primary[disabled]{ opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
+
+  .btn-whatsapp{ background:linear-gradient(135deg, #25D366, #1DAE54); color:#fff; box-shadow:0 12px 24px -10px rgba(37,211,102,.6); width:100%; }
+  .btn-whatsapp:hover{ transform:translateY(-2px); }
+  .btn-icon-only{ flex:1; padding:15px; gap:0; }
+
+  .dl-hint{ font-size:12.5px; color:#a98bc7; text-align:center; margin:0 0 14px; line-height:1.5; }
+
+  /* Progress dots */
+  .progress{ display:flex; gap:6px; justify-content:center; margin-top:26px; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--line); transition:all .3s ease; }
+  .dot.active{ width:22px; border-radius:4px; background:var(--pride-gradient); background-size:220% 100%; }
+
+  /* Category grid */
+  .cat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px; }
+  .cat-card{
+    border:2.5px solid var(--card-accent, var(--line));
+    border-radius:20px;
+    padding:22px 14px 18px;
+    text-align:center;
+    cursor:pointer;
+    background:#fff;
+    transition:all .2s ease;
+    position:relative;
+    overflow:hidden;
+  }
+  .cat-card::before{
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0; height:5px;
+    background:var(--card-accent, var(--line));
+    opacity:.85;
+  }
+  .cat-card:hover{ transform:translateY(-3px) rotate(-0.5deg); box-shadow:0 12px 24px -12px rgba(138,43,226,.35); }
+  .cat-card.selected{ background:color-mix(in srgb, var(--card-accent, var(--coral)) 12%, #fff); box-shadow:0 12px 24px -12px rgba(138,43,226,.5); transform:scale(1.02); }
+  .cat-icon{ width:48px; height:48px; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; }
+  .cat-icon svg{ width:36px; height:36px; color:var(--card-accent, var(--coral)); }
+  .cat-name{ font-size:13px; font-weight:700; font-family:'Baloo 2',cursive; color:var(--plum); letter-spacing:.06em; text-transform:uppercase; position:relative; }
+  .cat-label{ font-size:11.5px; color:#8a6aa8; margin-top:3px; font-weight:500; position:relative; }
+
+  /* Calendar */
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal-head button{ flex:none; width:34px; height:34px; padding:0; border-radius:10px; background:var(--blush); color:var(--p-purple); }
+  .cal-month{ font-family:'Baloo 2',cursive; font-weight:700; font-size:18px; background:var(--pride-gradient); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:22px; }
+  .cal-grid .dow{ font-size:11px; text-align:center; color:#a98bc7; font-weight:700; padding-bottom:4px; }
+  .cal-day{ aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:10px; font-size:14px; background:transparent; color:var(--ink); border:1px solid transparent; cursor:pointer; flex:none; padding:0; font-weight:600; }
+  .cal-day:hover{ background:var(--blush); }
+  .cal-day.disabled{ color:#e3d6ee; cursor:not-allowed; pointer-events:none; }
+  .cal-day.selected{ background:var(--pride-gradient); color:#fff; font-weight:800; box-shadow:0 6px 14px -6px rgba(138,43,226,.7); }
+  .cal-day.empty{ visibility:hidden; }
+
+  /* Time grid */
+  .time-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  .time-card{ border:2px solid var(--card-accent, var(--line)); border-radius:18px; padding:16px 14px; text-align:center; cursor:pointer; background:#fff; transition:all .18s ease; font-weight:700; font-size:15px; color:var(--plum); font-family:'Baloo 2',cursive; }
+  .time-card:hover{ transform:translateY(-2px) rotate(-0.5deg); }
+  .time-card.selected{ background:color-mix(in srgb, var(--card-accent, var(--coral)) 14%, #fff); box-shadow:0 10px 20px -12px rgba(138,43,226,.5); transform:scale(1.03); color:var(--card-accent, var(--coral)); }
+
+  /* Option cards (food/place/topic/etc) */
+  .opt-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  .opt-card{ border:2px solid var(--card-accent, var(--line)); border-radius:18px; padding:18px 14px; text-align:center; cursor:pointer; background:#fff; transition:all .18s ease; }
+  .opt-card:hover{ transform:translateY(-2px) rotate(-0.5deg); box-shadow:0 10px 20px -12px rgba(138,43,226,.35); }
+  .opt-card.selected{ background:color-mix(in srgb, var(--card-accent, var(--coral)) 14%, #fff); box-shadow:0 10px 20px -12px rgba(138,43,226,.55); transform:scale(1.03); }
+  .opt-card svg{ width:36px; height:36px; margin-bottom:8px; color:var(--card-accent, var(--coral)); }
+  .opt-name{ font-size:13.5px; font-weight:700; font-family:'Baloo 2',cursive; color:var(--plum); }
+
+  /* Custom input */
+  .custom-wrap{ margin-bottom:24px; }
+  .custom-toggle{ width:100%; background:transparent; border:2px dashed var(--p-purple); color:var(--p-purple); font-size:14px; font-weight:700; font-family:'Baloo 2',cursive; border-radius:14px; padding:13px 16px; }
+  .custom-toggle:hover{ background:var(--blush); border-color:var(--coral); color:var(--coral); }
+  .custom-slide{ max-height:0; overflow:hidden; transition:max-height .25s ease; }
+  .custom-slide.open{ max-height:70px; margin-top:10px; }
+  .custom-input{ width:100%; font-family:'Outfit',sans-serif; font-size:15px; padding:14px 16px; border-radius:14px; border:2px solid var(--line); background:#fff; color:var(--ink); }
+  .custom-input:focus{ outline:none; border-color:var(--coral); box-shadow:0 0 0 3px rgba(255,47,161,.15); }
+  .custom-input::placeholder{ color:#c9b3e0; }
+
+  /* Final invite card */
+  .invite-canvas{ border-radius:22px; overflow:hidden; box-shadow:0 14px 30px -14px rgba(107,33,168,.4); margin-bottom:22px; border:1px solid var(--line); }
+
+  .slide{ display:none; }
+  .slide.active{ display:block; }
+
+  footer.note{ text-align:center; font-size:12px; color:#a98bc7; margin-top:18px; font-weight:600; }
+
+  @media (prefers-reduced-motion:reduce){ .card{ animation:none; } button,.opt-card,.cat-card{ transition:none; } }
+</style>
+</head>
+<body>
+
+<!-- Decorative background: the journey from meeting to happily-ever-after (purely ambient, hidden on small screens) -->
+<div class="bg-decor" aria-hidden="true">
+
+  <!-- MEET -->
+  <svg class="bg-icon bi-meet" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="26" cy="16" r="9" fill="currentColor"/>
+    <path d="M13 50a13 13 0 0126 0v6H13v-6Z" fill="currentColor"/>
+    <path d="M32 30c6 2 10 6 12 12" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="94" cy="16" r="9" fill="currentColor"/>
+    <path d="M81 50a13 13 0 0126 0v6H81v-6Z" fill="currentColor"/>
+    <path d="M88 30c-6 2-10 6-12 12" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  </svg>
+
+  <!-- ENGAGE (proposal / ring) -->
+  <svg class="bg-icon bi-engage" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="28" cy="46" r="8" fill="currentColor"/>
+    <path d="M17 76a11 11 0 0122 0v4H17v-4Z" fill="currentColor"/>
+    <circle cx="86" cy="16" r="9" fill="currentColor"/>
+    <path d="M73 50a13 13 0 0126 0v6H73v-6Z" fill="currentColor"/>
+    <circle cx="56" cy="58" r="10" stroke="currentColor" stroke-width="6"/>
+    <path d="M56 48v-8" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  </svg>
+
+  <!-- MARRY (couple + heart + rings) -->
+  <svg class="bg-icon bi-marry" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="30" cy="18" r="9" fill="currentColor"/>
+    <path d="M17 52a13 13 0 0126 0v6H17v-6Z" fill="currentColor"/>
+    <circle cx="90" cy="18" r="9" fill="currentColor"/>
+    <path d="M77 52a13 13 0 0126 0v6H77v-6Z" fill="currentColor"/>
+    <path d="M60 32c-4-5-11-3-11 2s5 8 11 11c6-3 11-6 11-11s-7-7-11-2Z" fill="currentColor"/>
+    <circle cx="42" cy="82" r="8" stroke="currentColor" stroke-width="5"/>
+    <circle cx="58" cy="82" r="8" stroke="currentColor" stroke-width="5"/>
+  </svg>
+
+  <!-- HOME TOGETHER -->
+  <svg class="bg-icon bi-home" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 10L106 44H14L60 10Z" fill="currentColor"/>
+    <rect x="24" y="44" width="72" height="42" rx="6" fill="currentColor" opacity="0.55"/>
+    <circle cx="42" cy="62" r="9" fill="currentColor"/>
+    <path d="M31 86v-6a11 11 0 0122 0v6H31Z" fill="currentColor"/>
+    <circle cx="80" cy="62" r="9" fill="currentColor"/>
+    <path d="M69 86v-6a11 11 0 0122 0v6H69Z" fill="currentColor"/>
+  </svg>
+
+  <!-- BIKE -->
+  <!-- MOTORBIKE -->
+  <svg class="bg-icon bi-bike" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="26" cy="62" r="15" stroke="currentColor" stroke-width="7"/>
+    <circle cx="92" cy="62" r="15" stroke="currentColor" stroke-width="7"/>
+    <rect x="46" y="44" width="30" height="16" rx="7" fill="currentColor"/>
+    <path d="M26 62c6-11 17-18 28-18h12" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M76 46c9 1 15 6 19 16" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M82 38l11-11" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="95" cy="25" r="4.5" fill="currentColor"/>
+  </svg>
+
+  <!-- CAR -->
+  <svg class="bg-icon bi-car" viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="8" y="42" width="104" height="18" rx="9" fill="currentColor"/>
+    <path d="M30 42l8-18c2-4 6-6 10-6h24c4 0 8 2 10 6l8 18Z" fill="currentColor"/>
+    <rect x="40" y="26" width="16" height="14" rx="3" fill="var(--cream)"/>
+    <rect x="64" y="26" width="16" height="14" rx="3" fill="var(--cream)"/>
+    <circle cx="30" cy="62" r="10" fill="currentColor"/>
+    <circle cx="90" cy="62" r="10" fill="currentColor"/>
+  </svg>
+
+  <!-- METRO / TRAIN -->
+  <svg class="bg-icon bi-metro" viewBox="0 0 130 92" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 16v-7M50 9h13M63 9v-6" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="6" y="16" width="118" height="46" rx="16" fill="currentColor"/>
+    <rect x="18" y="27" width="16" height="14" rx="2.5" fill="var(--cream)"/>
+    <rect x="46" y="27" width="16" height="14" rx="2.5" fill="var(--cream)"/>
+    <rect x="74" y="27" width="16" height="14" rx="2.5" fill="var(--cream)"/>
+    <rect x="102" y="27" width="12" height="14" rx="2.5" fill="var(--cream)"/>
+    <rect x="6" y="46" width="118" height="5" fill="var(--cream)" opacity="0.55"/>
+    <circle cx="26" cy="70" r="7.5" fill="currentColor"/>
+    <circle cx="54" cy="70" r="7.5" fill="currentColor"/>
+    <circle cx="82" cy="70" r="7.5" fill="currentColor"/>
+    <circle cx="104" cy="70" r="7.5" fill="currentColor"/>
+  </svg>
+
+  <!-- FLIGHT -->
+  <svg class="bg-icon bi-flight" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 8c4 0 7 5 7 12v20l30 17v8l-30-8v22l12 9v7l-19-6-19 6v-7l12-9V57l-30 8v-8l30-17V20c0-7 3-12 7-12Z" fill="currentColor"/>
+  </svg>
+
+  <!-- CHAT / CONVERSATION -->
+  <svg class="bg-icon bi-chat" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="6" width="78" height="44" rx="16" fill="currentColor" opacity="0.5"/>
+    <path d="M20 50l-4 15 17-11" fill="currentColor" opacity="0.5"/>
+    <rect x="36" y="36" width="80" height="42" rx="16" fill="currentColor"/>
+    <path d="M100 78l4 13-17-9" fill="currentColor"/>
+    <path d="M66 52c-2-3-6-2-6 1s3 5 6 6c3-1 6-3 6-6s-4-4-6-1Z" fill="var(--cream)"/>
+  </svg>
+
+  <!-- BEACH / SEA SUNSET -->
+  <svg class="bg-icon bi-beach" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M40 32a20 20 0 0140 0Z" fill="currentColor"/>
+    <path d="M60 4v-7M45 8l-4-6M75 8l4-6M33 16l-6-4M87 16l6-4" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+    <line x1="4" y1="32" x2="116" y2="32" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+    <path d="M4 50c8-8 16-8 24 0s16 8 24 0 16-8 24 0 16 8 24 0" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+    <path d="M4 64c8-8 16-8 24 0s16 8 24 0 16-8 24 0 16 8 24 0" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+    <path d="M0 88c14-11 30-11 44-1s30 10 44 0 28-9 32-9v12H0Z" fill="currentColor" opacity="0.32"/>
+  </svg>
+
+  <!-- CLIFFS & WATERFALL -->
+  <svg class="bg-icon bi-mountains" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="60" cy="80" rx="36" ry="7" fill="var(--cream)" opacity="0.5"/>
+    <path d="M2 44c0-6 5-11 11-11h23v36c0 5-4 9-9 9H11c-5 0-9-4-9-9Z" fill="currentColor"/>
+    <path d="M118 44c0-6-5-11-11-11H84v36c0 5 4 9 9 9h9c5 0 9-4 9-9Z" fill="currentColor"/>
+    <rect x="15" y="16" width="4" height="11" fill="currentColor"/>
+    <circle cx="17" cy="12" r="9" fill="currentColor" opacity="0.6"/>
+    <rect x="101" y="16" width="4" height="11" fill="currentColor"/>
+    <circle cx="103" cy="12" r="9" fill="currentColor" opacity="0.6"/>
+    <path d="M44 34c2 6-2 9 0 15s-2 9 0 14-2 8 0 12" stroke="var(--cream)" stroke-width="6" stroke-linecap="round"/>
+    <path d="M60 30c2 7-2 10 0 16s-2 9 0 15-2 9 0 13" stroke="var(--cream)" stroke-width="7" stroke-linecap="round"/>
+    <path d="M76 34c2 6-2 9 0 15s-2 9 0 14-2 8 0 12" stroke="var(--cream)" stroke-width="6" stroke-linecap="round"/>
+    <path d="M38 80c5 3 10 3 15 0M53 84c5 2 10 2 15 0M68 80c5 3 10 3 15 0" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.35"/>
+  </svg>
+
+  <!-- FOREST -->
+  <svg class="bg-icon bi-forest" viewBox="0 0 150 92" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="11" y="70" width="6" height="10" fill="currentColor" opacity="0.7"/>
+    <path d="M14 26L2 46H10L0 62H28L18 46H26Z" fill="currentColor" opacity="0.7"/>
+    <rect x="37" y="76" width="7" height="12" fill="currentColor"/>
+    <path d="M40.5 10L26 34H35L23 52H58L46 34H55Z" fill="currentColor"/>
+    <rect x="65" y="72" width="6" height="11" fill="currentColor" opacity="0.8"/>
+    <path d="M68 22L55 44H63L52 60H84L73 44H81Z" fill="currentColor" opacity="0.8"/>
+    <rect x="93" y="76" width="7" height="12" fill="currentColor"/>
+    <path d="M96.5 12L82 36H91L79 54H114L102 36H111Z" fill="currentColor"/>
+    <rect x="121" y="70" width="6" height="10" fill="currentColor" opacity="0.7"/>
+    <path d="M124 28L112 48H120L110 64H138L128 48H136Z" fill="currentColor" opacity="0.7"/>
+  </svg>
+
+  <!-- ROAD -->
+  <svg class="bg-icon bi-road" viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 82L44 10H76L102 82Z" fill="currentColor"/>
+    <path d="M56 78V60M58 48V38M59.5 28V18" stroke="var(--cream)" stroke-width="6" stroke-linecap="round"/>
+  </svg>
+
+</div>
+
+<div class="stage">
+
+  <!-- SLIDE 1: YES/NO -->
+  <div class="slide active" id="slide-1">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7.5-4.6-10-9.3C.2 8.1 2 4.5 5.6 4.1 8 3.9 9.8 5 12 7.4 14.2 5 16 3.9 18.4 4.1 22 4.5 23.8 8.1 22 11.7 19.5 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/></svg>
+        a question for you
+      </div>
+      <div class="icon-row">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7.5-4.6-10-9.3C.2 8.1 2 4.5 5.6 4.1 8 3.9 9.8 5 12 7.4 14.2 5 16 3.9 18.4 4.1 22 4.5 23.8 8.1 22 11.7 19.5 16.4 12 21 12 21Z" fill="currentColor"/></svg>
+        </div>
+      </div>
+      <div class="sender-tag">
+        Chezy papa
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 21s-7.5-4.6-10-9.3C.2 8.1 2 4.5 5.6 4.1 8 3.9 9.8 5 12 7.4 14.2 5 16 3.9 18.4 4.1 22 4.5 23.8 8.1 22 11.7 19.5 16.4 12 21 12 21Z" fill="currentColor"/></svg>
+      </div>
+      <h1>Shall we go on a date?</h1>
+      <p class="sub">Just one button works here. You already know which one.</p>
+      <div class="btn-row">
+        <button class="btn-yes" onclick="goTo(2)">
+          <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M5 12l4 4L19 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Yes, let's go
+        </button>
+        <button class="btn-no" disabled aria-disabled="true" title="Not an option today">
+          <svg class="lock" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="9" rx="2" stroke="#b9a6ac" stroke-width="1.6"/><path d="M8 10V7a4 4 0 018 0v3" stroke="#b9a6ac" stroke-width="1.6"/></svg>
+          No
+        </button>
+      </div>
+      <div class="progress" id="dots-1"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2: CATEGORY -->
+  <div class="slide" id="slide-2">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        what are we doing
+      </div>
+      <h1>What kind of date?</h1>
+      <p class="sub">Pick one and we'll plan it around it.</p>
+      <div class="cat-grid" id="cat-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('cat-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Something else? Type your own
+        </button>
+        <div class="custom-slide" id="cat-custom">
+          <input type="text" class="custom-input" id="custom-cat-input" maxlength="30" placeholder="e.g. Picnic, Game night" oninput="onCustomCategory()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(1)">Back</button>
+        <button class="btn-primary" id="cat-next-btn" disabled onclick="goTo(3)">Continue</button>
+      </div>
+      <div class="progress" id="dots-2"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: DATE -->
+  <div class="slide" id="slide-3">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        pick a date
+      </div>
+      <h1>On which date?</h1>
+      <p class="sub">Pick a day that works for you — we'll hold it.</p>
+      <div class="cal-head">
+        <button onclick="changeMonth(-1)" aria-label="Previous month">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cal-month" id="cal-month-label"></div>
+        <button onclick="changeMonth(1)" aria-label="Next month">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="cal-grid" id="cal-dow"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(2)">Back</button>
+        <button class="btn-primary" id="date-next-btn" disabled onclick="goTo(4)">Continue</button>
+      </div>
+      <div class="progress" id="dots-3"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4: TIME -->
+  <div class="slide" id="slide-4">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        pick a time
+      </div>
+      <h1>At what time?</h1>
+      <p class="sub">Pick a time that suits you best.</p>
+      <div class="time-grid" id="time-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('time-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Different time? Type your own
+        </button>
+        <div class="custom-slide" id="time-custom">
+          <input type="text" class="custom-input" id="custom-time-input" maxlength="20" placeholder="e.g. 9:30 PM" oninput="onCustomTime()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(3)">Back</button>
+        <button class="btn-primary" id="time-next-btn" disabled onclick="onTimeNext()">Continue</button>
+      </div>
+      <div class="progress" id="dots-4"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4M: MEETING PLACE (all categories) -->
+  <div class="slide" id="slide-4m">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6-5.7-6-10.5a6 6 0 0112 0C18 15.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="10.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>
+        meeting spot
+      </div>
+      <h1>Where shall we meet?</h1>
+      <p class="sub">Pick a spot to start our date from.</p>
+      <div class="opt-grid" id="meetplace-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('meetplace-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Somewhere else? Type your own
+        </button>
+        <div class="custom-slide" id="meetplace-custom">
+          <input type="text" class="custom-input" id="custom-meetplace-input" maxlength="40" placeholder="e.g. My place" oninput="onCustomMeetPlace()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(4)">Back</button>
+        <button class="btn-primary" id="meetplace-next-btn" disabled onclick="onMeetPlaceNext()">Continue</button>
+      </div>
+      <div class="progress" id="dots-4m"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4B: FOOD ITEM (Food category only) -->
+  <div class="slide" id="slide-4b">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        what are we eating
+      </div>
+      <h1>Which food do you want to eat?</h1>
+      <p class="sub">Choose one — this is the most important decision so far.</p>
+      <div class="opt-grid" id="fooditem-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('fooditem-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Can't find it? Type your own
+        </button>
+        <div class="custom-slide" id="fooditem-custom">
+          <input type="text" class="custom-input" id="custom-fooditem-input" maxlength="40" placeholder="e.g. Mama's biryani" oninput="onCustomFoodItem()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo('4m')">Back</button>
+        <button class="btn-primary" id="fooditem-next-btn" disabled onclick="goTo(5)">Continue</button>
+      </div>
+      <div class="progress" id="dots-4b"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: DYNAMIC A -->
+  <div class="slide" id="slide-5">
+    <div class="card">
+      <div class="eyebrow" id="s5-eyebrow"></div>
+      <h1 id="s5-title"></h1>
+      <p class="sub" id="s5-sub"></p>
+      <div class="opt-grid" id="s5-grid"></div>
+      <div class="custom-wrap" id="s5-custom-wrap">
+        <button type="button" class="custom-toggle" id="s5-custom-toggle" onclick="toggleCustom('s5-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span id="s5-custom-label">Something else? Type your own</span>
+        </button>
+        <div class="custom-slide" id="s5-custom">
+          <input type="text" class="custom-input" id="custom-s5-input" maxlength="40" placeholder="" oninput="onCustomS5()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" id="s5-back-btn" onclick="goTo(state.category==='food'?'4b':'4m')">Back</button>
+        <button class="btn-primary" id="s5-next-btn" disabled onclick="nextFromS5()">Continue</button>
+      </div>
+      <div class="progress" id="dots-5"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: DYNAMIC B (MOVIE cinema only) -->
+  <div class="slide" id="slide-6">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6-5.7-6-10.5a6 6 0 0112 0C18 15.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="10.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>
+        almost there
+      </div>
+      <h1>Which cinema?</h1>
+      <p class="sub">Pick the one closest to you.</p>
+      <div class="opt-grid" id="s6-grid"></div>
+      <div class="custom-wrap">
+        <button type="button" class="custom-toggle" onclick="toggleCustom('s6-custom')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Different cinema? Type your own
+        </button>
+        <div class="custom-slide" id="s6-custom">
+          <input type="text" class="custom-input" id="custom-s6-input" maxlength="40" placeholder="e.g. Prasads IMAX" oninput="onCustomS6()" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goTo(5)">Back</button>
+        <button class="btn-primary" id="s6-next-btn" disabled onclick="renderInvite(); goTo(7)">See our date card</button>
+      </div>
+      <div class="progress" id="dots-6"></div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7: FINAL -->
+  <div class="slide" id="slide-7">
+    <div class="card">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7.5-4.6-10-9.3C.2 8.1 2 4.5 5.6 4.1 8 3.9 9.8 5 12 7.4 14.2 5 16 3.9 18.4 4.1 22 4.5 23.8 8.1 22 11.7 19.5 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/></svg>
+        it's official
+      </div>
+      <h1>The date is set.</h1>
+      <p class="sub">Here's our card — save it, send it, frame it.</p>
+      <div class="invite-canvas">
+        <svg id="invite-svg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <p class="dl-hint">Please Share this receipt to your Mama. Your Mama will take you 😊</p>
+      <div class="btn-row">
+        <button class="btn-secondary btn-icon-only" onclick="goHome()" aria-label="Home" title="Start over">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M3 12L12 3l9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="btn-secondary btn-icon-only" id="final-back-btn" aria-label="Back" title="Back">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="btn-primary btn-icon-only" onclick="downloadInvite()" aria-label="Download" title="Download">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="btn-whatsapp btn-icon-only" onclick="shareToWhatsapp()" aria-label="Share on WhatsApp" title="Share on WhatsApp">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="white"><path d="M17.5 14.4c-.3-.1-1.6-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.4.1-.6.1-.1.3-.3.4-.5.1-.1.2-.3.3-.4.1-.2 0-.4 0-.5-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.3 0 1.4 1 2.7 1.1 2.9.1.2 2 3 4.7 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.6-.7 1.9-1.3.2-.6.2-1.1.2-1.2-.1-.2-.3-.2-.5-.3Z"/><path d="M12 2C6.5 2 2 6.5 2 12c0 1.9.5 3.6 1.4 5.2L2 22l4.9-1.3C8.4 21.6 10.2 22 12 22c5.5 0 10-4.5 10-10S17.5 2 12 2Zm0 18.1c-1.7 0-3.3-.5-4.6-1.3l-.3-.2-3.2.9.9-3.1-.2-.3C3.7 14 3.2 13 3.2 12c0-4.8 3.9-8.7 8.7-8.7s8.7 3.9 8.7 8.7-3.8 8.1-8.6 8.1Z"/></svg>
+        </button>
+      </div>
+      <div class="progress" id="dots-7"></div>
+    </div>
+  </div>
+
+  <footer class="note">made with a little bit of butterflies © #SwaCh</footer>
+</div>
+
+<!-- Confetti overlay -->
+<canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;display:none;"></canvas>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  category: null,   // 'food' | 'ride' | 'movie' | 'time' | 'custom'
+  customCategoryLabel: null, // free-text label when category === 'custom'
+  selectedDate: null,
+  selectedTime: null,
+  selA: null,   // slide 5 selection (place/destination/movie/topic)
+  selB: null,   // slide 6 selection (cinema, MOVIE only)
+  selFoodItem: null, // food item selection (Food category only)
+  selMeetPlace: null, // meeting place (all categories)
+};
+
+// Display name for the current category, handling the free-text custom case
+function currentCategoryName(){
+  if(state.category === 'custom') return state.customCategoryLabel || 'Our Date';
+  const c = categories.find(x => x.id === state.category);
+  return c ? c.name : '';
+}
+
+// ── Pride palette cycled across generated option cards for a funky rainbow feel ──
+const prideColors = ['#e40303','#ff8c00','#00c2b8','#008026','#0060ff','#8a2be2'];
+function accentFor(i){ return prideColors[i % prideColors.length]; }
+
+// ── Categories ────────────────────────────────────────────────────────────────
+const categories = [
+  {
+    id:'food', name:'Food', label:'Let\'s eat something',
+    icon:`<path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  },
+  {
+    id:'ride', name:'Ride', label:'Let\'s go somewhere',
+    icon:`<path d="M5 17H3v-4l2-5h14l2 5v4h-2M5 17h14M5 17a2 2 0 01-4 0 2 2 0 014 0Zm14 0a2 2 0 014 0 2 2 0 01-4 0Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>`,
+  },
+  {
+    id:'movie', name:'Movie', label:'Let\'s watch something',
+    icon:`<rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 6V2M17 6V2M2 12h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  },
+  {
+    id:'time', name:'Time', label:'Let\'s talk & chill',
+    icon:`<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`,
+  },
+];
+
+// ── Slide-5 options per category ──────────────────────────────────────────────
+const s5Config = {
+  food: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> where shall we eat`,
+    title:'Where shall we eat?',
+    sub:'Pick the spot for our food date.',
+    customLabel:'Somewhere else? Type it',
+    customPlaceholder:'e.g. Srinivasa Bhavan',
+    nextLabel:'See our date card',
+    goNext: () => { renderInvite(); goTo(7); },
+    options:[
+      { name:'Restaurant', icon:`<path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+      { name:'Cosy Cafe', icon:`<path d="M4 9h13v4a5 5 0 01-5 5H9a5 5 0 01-5-5V9Z" stroke="currentColor" stroke-width="1.6"/><path d="M17 10h1.5a2.5 2.5 0 010 5H17" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Tea Place', icon:`<path d="M6 3c0 2-1.5 2-1.5 4S6 9 6 11M10 3c0 2-1.5 2-1.5 4S10 9 10 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4 12h12v3a5 5 0 01-5 5H9a5 5 0 01-5-5v-3Z" stroke="currentColor" stroke-width="1.6"/><path d="M16 13h1.5a2.5 2.5 0 010 5H16" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Pizza Den', icon:`<path d="M3 5l9 16 9-16a20 20 0 00-18 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="9" r="1.1" fill="currentColor"/><circle cx="14.5" cy="11.5" r="1.1" fill="currentColor"/>` },
+    ],
+  },
+  ride: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 21s-6-5.7-6-10.5a6 6 0 0112 0C18 15.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="10.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg> destination`,
+    title:'Where shall we go?',
+    sub:'Pick a destination for our ride.',
+    customLabel:'Somewhere else? Type it',
+    customPlaceholder:'e.g. Hussain Sagar',
+    nextLabel:'See our date card',
+    goNext: () => { renderInvite(); goTo(7); },
+    options:[
+      { name:'City Drive', icon:`<path d="M5 17H3v-4l2-5h14l2 5v4h-2M5 17h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+      { name:'Hill Station', icon:`<path d="M3 20l5-10 4 6 3-4 6 8H3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` },
+      { name:'Beach', icon:`<path d="M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Mall', icon:`<path d="M4 20V8l8-4 8 4v12H4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20v-5h6v5" stroke="currentColor" stroke-width="1.6"/>` },
+    ],
+  },
+  movie: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 6V2M17 6V2M2 12h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> pick a movie`,
+    title:'Which movie?',
+    sub:'What shall we watch together?',
+    customLabel:'Different title? Type it',
+    customPlaceholder:'e.g. Interstellar',
+    nextLabel:'Now pick a cinema',
+    goNext: () => { populateS6(); goTo(6); },
+    options:[
+      { name:'Action', icon:`<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` },
+      { name:'Romance', icon:`<path d="M12 21s-7.5-4.6-10-9.3C.2 8.1 2 4.5 5.6 4.1 8 3.9 9.8 5 12 7.4 14.2 5 16 3.9 18.4 4.1 22 4.5 23.8 8.1 22 11.7 19.5 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Comedy', icon:`<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M9 8.5c0 .8-.4 1.5-1 1.5s-1-.7-1-1.5S7.4 7 8 7s1 .7 1 1.5ZM17 8.5c0 .8-.4 1.5-1 1.5s-1-.7-1-1.5S15.4 7 16 7s1 .7 1 1.5Z" fill="currentColor"/><path d="M8.5 14.5s1 2.5 3.5 2.5 3.5-2.5 3.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` },
+      { name:'Thriller', icon:`<path d="M12 2a10 10 0 100 20A10 10 0 0012 2Z" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+    ],
+  },
+  time: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> what's the vibe`,
+    title:'What shall we talk about?',
+    sub:'Pick a topic for our quality time.',
+    customLabel:'Something else on your mind?',
+    customPlaceholder:'e.g. Our travel plans',
+    nextLabel:'See our date card',
+    goNext: () => { renderInvite(); goTo(7); },
+    options:[
+      { name:'Life Goals', icon:`<path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` },
+      { name:'Future Plans', icon:`<path d="M3 12h18M12 3l9 9-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+      { name:'Memories', icon:`<path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78Z" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Deep Talk', icon:`<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` },
+    ],
+  },
+  custom: {
+    eyebrow:`<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg> the details`,
+    title:'What shall we do together?',
+    sub:'Pick a vibe to go with it.',
+    customLabel:'Something else? Type it',
+    customPlaceholder:'e.g. Surprise me',
+    nextLabel:'See our date card',
+    goNext: () => { renderInvite(); goTo(7); },
+    options:[
+      { name:'Adventure', icon:`<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M15 9l-2 6-6 2 2-6 6-2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` },
+      { name:'Surprise Me', icon:`<rect x="3" y="8" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 8v13" stroke="currentColor" stroke-width="1.6"/><path d="M12 8c-2-4-6-4-6-1s3 1 6 1Zm0 0c2-4 6-4 6-1s-3 1-6 1Z" stroke="currentColor" stroke-width="1.4"/>` },
+      { name:'Chill Vibes', icon:`<path d="M9 18V5l11-2v13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="16" r="3" stroke="currentColor" stroke-width="1.6"/>` },
+      { name:'Something New', icon:`<path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` },
+    ],
+  },
+};
+
+// ── Cinema options (MOVIE slide 6) ────────────────────────────────────────────
+const cinemas = [
+  { name:'PVR', icon:`<rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 6V2M17 6V2M2 12h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` },
+  { name:'INOX', icon:`<rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 7V4M16 7V4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` },
+  { name:'Cinepolis', icon:`<path d="M2 8h20v11a2 2 0 01-2 2H4a2 2 0 01-2-2V8ZM2 8l10-5 10 5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` },
+  { name:'Drive-in', icon:`<path d="M5 17H3v-4l2-5h14l2 5v4h-2M5 17h14M7 17a2 2 0 104 0M13 17a2 2 0 104 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+];
+
+// ── Times ─────────────────────────────────────────────────────────────────────
+const times = ['12:00 PM','3:00 PM','6:00 PM','8:00 PM'];
+
+const foodItems = [
+  { name:'Lays Shawarma', icon:`<path d="M5 12c0-4 3-7 7-7s7 3 7 7-3 9-7 9-7-5-7-9Z" stroke="currentColor" stroke-width="1.6"/><path d="M7 10h10M6.5 14h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` },
+  { name:'Pizza', icon:`<path d="M3 5l9 16 9-16a20 20 0 00-18 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="9" r="1.1" fill="currentColor"/><circle cx="14.5" cy="11.5" r="1.1" fill="currentColor"/><circle cx="11" cy="14" r="1.1" fill="currentColor"/>` },
+  { name:'Pizza Dosa', icon:`<path d="M4 13c0-4 4-7 8-7s8 3 8 7-3 5-8 5-8-1-8-5Z" stroke="currentColor" stroke-width="1.6"/><path d="M7 13h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` },
+  { name:'Chicken Sixer', icon:`<path d="M9 4c2 0 3 1.6 3 3.6 0 1-.4 1.8-1 2.4l5 5c1.6 1.6 1.6 4-.2 5.4-1.6 1.2-3.6.8-5-.6l-5-5c-.6.6-1.4 1-2.4 1C1.6 15.8 0 14.2 0 12.2 0 10.4 1.4 9 3.2 9c-.4-2.6 1.8-5 5.8-5Z" stroke="currentColor" stroke-width="1.4" transform="translate(2 1) scale(0.85)"/>` },
+];
+
+// ── Total steps per category (used for dots) ──────────────────────────────────
+function totalSteps(){
+  if(state.category==='movie') return 7; // 1,2,3,4,5,6,7 — no meeting place step
+  if(state.category==='food') return 8;  // 1,2,3,4,4m,4b,5,7
+  return 7; // 1,2,3,4,4m,5,7
+}
+
+// ── Progress dots ─────────────────────────────────────────────────────────────
+function renderDots(slideNum){
+  const total = totalSteps();
+  const key = String(slideNum);
+  let step;
+  if(key==='7') step = total;
+  else if(key==='4m') step = 5;
+  else if(key==='4b') step = 6;
+  else if(key==='5'){
+    // movie: no 4m, so slide5=step5; food: 4m+4b before, so slide5=step7 (but food goes 4b→5→7, step7); others: 4m before, so slide5=step6
+    if(state.category==='movie') step = 5;
+    else if(state.category==='food') step = 7;
+    else step = 6;
+  }
+  else if(key==='6') step = state.category==='movie' ? 6 : 6;
+  else step = parseInt(key);
+
+  const el = document.getElementById('dots-' + slideNum);
+  if(!el) return;
+  el.innerHTML = '';
+  for(let i=1; i<=total; i++){
+    const d = document.createElement('div');
+    d.className = 'dot' + (i===step ? ' active' : '');
+    el.appendChild(d);
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function goTo(n){
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.getElementById('slide-'+n).classList.add('active');
+  renderDots(n);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// Reset everything and jump back to the very first question
+function goHome(){
+  state.category = null;
+  state.selectedDate = null;
+  state.selectedTime = null;
+  state.selA = null;
+  state.selB = null;
+  state.selFoodItem = null;
+  state.selMeetPlace = null;
+
+  document.querySelectorAll('.cat-card, #meetplace-grid .opt-card, #fooditem-grid .opt-card, .time-card, #s5-grid .opt-card, #s6-grid .opt-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('cat-next-btn').disabled = true;
+  document.getElementById('date-next-btn').disabled = true;
+  document.getElementById('time-next-btn').disabled = true;
+  document.getElementById('meetplace-next-btn').disabled = true;
+  document.getElementById('fooditem-next-btn').disabled = true;
+
+  ['custom-time-input','custom-meetplace-input','custom-fooditem-input','custom-s5-input','custom-s6-input'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.querySelectorAll('.custom-slide').forEach(s => s.classList.remove('open'));
+
+  goTo(1);
+}
+
+// ── Category ──────────────────────────────────────────────────────────────────
+function initCategories(){
+  const grid = document.getElementById('cat-grid');
+  categories.forEach((c,i) => {
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    card.style.setProperty('--card-accent', accentFor(i));
+    card.setAttribute('tabindex','0');
+    card.innerHTML = `
+      <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none">${c.icon}</svg></div>
+      <div class="cat-name">${c.name}</div>
+      <div class="cat-label">${c.label}</div>`;
+    card.onclick = () => selectCategory(c.id, card);
+    card.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(c.id, card); }};
+    grid.appendChild(card);
+  });
+}
+
+function selectCategory(id, card){
+  state.category = id;
+  state.customCategoryLabel = null;
+  state.selA = null;
+  state.selB = null;
+  state.selFoodItem = null;
+  state.selMeetPlace = null;
+  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('cat-next-btn').disabled = false;
+  // clear/collapse the custom category field since a preset was chosen
+  const catCustomInput = document.getElementById('custom-cat-input');
+  if(catCustomInput) catCustomInput.value = '';
+  const catCustomSlide = document.getElementById('cat-custom');
+  if(catCustomSlide) catCustomSlide.classList.remove('open');
+  // pre-fill slide 5
+  populateS5();
+  // set final-back button target
+  setFinalBackHandler();
+}
+
+// Free-text "type your own" category on slide 2
+function onCustomCategory(){
+  const val = document.getElementById('custom-cat-input').value.trim();
+  if(val.length > 0){
+    document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
+    state.category = 'custom';
+    state.customCategoryLabel = val;
+    state.selA = null;
+    state.selB = null;
+    state.selFoodItem = null;
+    state.selMeetPlace = null;
+    document.getElementById('cat-next-btn').disabled = false;
+    populateS5();
+    setFinalBackHandler();
+  } else if(state.category === 'custom'){
+    state.category = null;
+    state.customCategoryLabel = null;
+    document.getElementById('cat-next-btn').disabled = true;
+  }
+}
+
+function setFinalBackHandler(){
+  document.getElementById('final-back-btn').onclick = () => {
+    if(state.category==='movie') goTo(6);
+    else goTo(5);
+  };
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+let viewYear, viewMonth;
+const today = new Date();
+const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function initCalendar(){
+  viewYear = today.getFullYear();
+  viewMonth = today.getMonth();
+  const dow = document.getElementById('cal-dow');
+  ['S','M','T','W','T','F','S'].forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'dow'; el.textContent = d;
+    dow.appendChild(el);
+  });
+  renderCalendar();
+}
+
+function changeMonth(delta){
+  viewMonth += delta;
+  if(viewMonth<0){ viewMonth=11; viewYear--; }
+  if(viewMonth>11){ viewMonth=0; viewYear++; }
+  renderCalendar();
+}
+
+function renderCalendar(){
+  document.getElementById('cal-month-label').textContent = monthNames[viewMonth]+' '+viewYear;
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  for(let i=0;i<firstDay;i++){
+    const e=document.createElement('div'); e.className='cal-day empty'; grid.appendChild(e);
+  }
+  for(let d=1;d<=daysInMonth;d++){
+    const btn=document.createElement('button');
+    btn.className='cal-day'; btn.textContent=d;
+    const thisDate=new Date(viewYear,viewMonth,d);
+    if(thisDate<todayMid){ btn.classList.add('disabled'); }
+    else { btn.onclick=()=>selectDate(viewYear,viewMonth,d); }
+    if(state.selectedDate&&state.selectedDate.y===viewYear&&state.selectedDate.m===viewMonth&&state.selectedDate.d===d) btn.classList.add('selected');
+    grid.appendChild(btn);
+  }
+}
+
+function selectDate(y,m,d){
+  state.selectedDate={y,m,d};
+  renderCalendar();
+  document.getElementById('date-next-btn').disabled=false;
+}
+
+// ── Time ──────────────────────────────────────────────────────────────────────
+function initTime(){
+  const grid = document.getElementById('time-grid');
+  times.forEach((t,i) => {
+    const c=document.createElement('div');
+    c.className='time-card'; c.textContent=t;
+    c.style.setProperty('--card-accent', accentFor(i));
+    c.setAttribute('tabindex','0');
+    c.onclick=()=>selectTime(t,c);
+    c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectTime(t,c);}};
+    grid.appendChild(c);
+  });
+}
+
+function selectTime(t,card){
+  state.selectedTime=t;
+  document.querySelectorAll('.time-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-time-input').value='';
+  document.getElementById('time-next-btn').disabled=false;
+}
+
+function onCustomTime(){
+  const val=document.getElementById('custom-time-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('.time-card').forEach(c=>c.classList.remove('selected'));
+    state.selectedTime=val;
+    document.getElementById('time-next-btn').disabled=false;
+  } else if(!document.querySelector('.time-card.selected')){
+    state.selectedTime=null;
+    document.getElementById('time-next-btn').disabled=true;
+  }
+}
+
+// Time next: skip meeting place for movie (cinema covers location), go direct to slide 5
+function onTimeNext(){
+  if(state.category==='movie'){
+    goTo(5);
+  } else {
+    initMeetPlaceSlide();
+    goTo('4m');
+  }
+}
+
+// ── Meeting Place Slide (4m) ──────────────────────────────────────────────────
+const meetPlaces = [
+  { name:'Home', icon:`<path d="M3 12L12 3l9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+  { name:'Coffee Shop', icon:`<path d="M4 9h13v4a5 5 0 01-5 5H9a5 5 0 01-5-5V9Z" stroke="currentColor" stroke-width="1.6"/><path d="M17 10h1.5a2.5 2.5 0 010 5H17" stroke="currentColor" stroke-width="1.6"/>` },
+  { name:'Park', icon:`<path d="M12 2C8 2 5 7 5 11c0 5 4 8 7 11 3-3 7-6 7-11 0-4-3-9-7-9Z" stroke="currentColor" stroke-width="1.6"/><path d="M12 21v-8M9 15l3-3 3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` },
+  { name:'Restaurant', icon:`<path d="M7 3v8a3 3 0 003 3v7M7 3v6M11 3v6M15 3c-1.2 1.4-1.8 3-1.8 5.2 0 2.2 1 3.8 1.8 4.3V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` },
+];
+
+let meetPlaceBuilt = false;
+function initMeetPlaceSlide(){
+  if(meetPlaceBuilt) return;
+  meetPlaceBuilt = true;
+  const grid=document.getElementById('meetplace-grid');
+  meetPlaces.forEach((p,i)=>{
+    const card=document.createElement('div');
+    card.className='opt-card';
+    card.style.setProperty('--card-accent', accentFor(i));
+    card.setAttribute('tabindex','0');
+    card.innerHTML=`<svg viewBox="0 0 24 24" fill="none">${p.icon}</svg><div class="opt-name">${p.name}</div>`;
+    card.onclick=()=>selectMeetPlace(p,card);
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectMeetPlace(p,card);}};
+    grid.appendChild(card);
+  });
+}
+
+function selectMeetPlace(p,card){
+  state.selMeetPlace=p;
+  document.querySelectorAll('#meetplace-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-meetplace-input').value='';
+  document.getElementById('meetplace-next-btn').disabled=false;
+}
+
+function onCustomMeetPlace(){
+  const val=document.getElementById('custom-meetplace-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('#meetplace-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+    state.selMeetPlace={name:val};
+    document.getElementById('meetplace-next-btn').disabled=false;
+  } else if(!document.querySelector('#meetplace-grid .opt-card.selected')){
+    state.selMeetPlace=null;
+    document.getElementById('meetplace-next-btn').disabled=true;
+  }
+}
+
+function onMeetPlaceNext(){
+  if(!state.selMeetPlace) return;
+  if(state.category==='food'){
+    initFoodItemSlide();
+    goTo('4b');
+  } else {
+    goTo(5);
+  }
+}
+
+// ── Food Item Slide (4b) ──────────────────────────────────────────────────────
+function initFoodItemSlide(){
+  const grid=document.getElementById('fooditem-grid');
+  if(grid.children.length > 0) return; // already built
+  foodItems.forEach((f,i)=>{
+    const card=document.createElement('div');
+    card.className='opt-card';
+    card.style.setProperty('--card-accent', accentFor(i));
+    card.setAttribute('tabindex','0');
+    card.innerHTML=`<svg viewBox="0 0 24 24" fill="none">${f.icon}</svg><div class="opt-name">${f.name}</div>`;
+    card.onclick=()=>selectFoodItem(f,card);
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectFoodItem(f,card);}};
+    grid.appendChild(card);
+  });
+}
+
+function selectFoodItem(f,card){
+  state.selFoodItem=f;
+  document.querySelectorAll('#fooditem-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-fooditem-input').value='';
+  document.getElementById('fooditem-next-btn').disabled=false;
+}
+
+function onCustomFoodItem(){
+  const val=document.getElementById('custom-fooditem-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('#fooditem-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+    state.selFoodItem={ name:val };
+    document.getElementById('fooditem-next-btn').disabled=false;
+  } else if(!document.querySelector('#fooditem-grid .opt-card.selected')){
+    state.selFoodItem=null;
+    document.getElementById('fooditem-next-btn').disabled=true;
+  }
+}
+
+// ── Slide 5: Dynamic options ──────────────────────────────────────────────────
+function populateS5(){
+  const cfg = s5Config[state.category];
+  if(!cfg) return;
+  document.getElementById('s5-eyebrow').innerHTML = cfg.eyebrow;
+  document.getElementById('s5-title').textContent = cfg.title;
+  document.getElementById('s5-sub').textContent = cfg.sub;
+  document.getElementById('s5-custom-label').textContent = cfg.customLabel;
+  document.getElementById('custom-s5-input').placeholder = cfg.customPlaceholder;
+  document.getElementById('s5-next-btn').textContent = cfg.nextLabel;
+  document.getElementById('s5-next-btn').disabled = true;
+  document.getElementById('s5-next-btn').onclick = () => {
+    if(state.selA) cfg.goNext();
+  };
+
+  const grid=document.getElementById('s5-grid');
+  grid.innerHTML='';
+  state.selA=null;
+  document.getElementById('custom-s5-input').value='';
+  document.getElementById('s5-custom').classList.remove('open');
+
+  cfg.options.forEach((opt,i)=>{
+    const card=document.createElement('div');
+    card.className='opt-card';
+    card.style.setProperty('--card-accent', accentFor(i));
+    card.setAttribute('tabindex','0');
+    card.innerHTML=`<svg viewBox="0 0 24 24" fill="none">${opt.icon}</svg><div class="opt-name">${opt.name}</div>`;
+    card.onclick=()=>selectS5(opt,card);
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectS5(opt,card);}};
+    grid.appendChild(card);
+  });
+}
+
+function selectS5(opt,card){
+  state.selA=opt;
+  document.querySelectorAll('#s5-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-s5-input').value='';
+  document.getElementById('s5-next-btn').disabled=false;
+}
+
+function onCustomS5(){
+  const val=document.getElementById('custom-s5-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('#s5-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+    state.selA={ name:val, icon:`<path d="M12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0" stroke="currentColor" stroke-width="1.6"/>` };
+    document.getElementById('s5-next-btn').disabled=false;
+  } else if(!document.querySelector('#s5-grid .opt-card.selected')){
+    state.selA=null;
+    document.getElementById('s5-next-btn').disabled=true;
+  }
+}
+
+function nextFromS5(){
+  if(!state.selA) return;
+  s5Config[state.category].goNext();
+}
+
+// ── Slide 6: Cinema (MOVIE only) ──────────────────────────────────────────────
+function populateS6(){
+  const grid=document.getElementById('s6-grid');
+  grid.innerHTML='';
+  state.selB=null;
+  document.getElementById('custom-s6-input').value='';
+  document.getElementById('s6-custom').classList.remove('open');
+  document.getElementById('s6-next-btn').disabled=true;
+  cinemas.forEach((c,i)=>{
+    const card=document.createElement('div');
+    card.className='opt-card';
+    card.style.setProperty('--card-accent', accentFor(i));
+    card.setAttribute('tabindex','0');
+    card.innerHTML=`<svg viewBox="0 0 24 24" fill="none">${c.icon}</svg><div class="opt-name">${c.name}</div>`;
+    card.onclick=()=>selectS6(c,card);
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectS6(c,card);}};
+    grid.appendChild(card);
+  });
+}
+
+function selectS6(opt,card){
+  state.selB=opt;
+  document.querySelectorAll('#s6-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('custom-s6-input').value='';
+  document.getElementById('s6-next-btn').disabled=false;
+}
+
+function onCustomS6(){
+  const val=document.getElementById('custom-s6-input').value.trim();
+  if(val.length>0){
+    document.querySelectorAll('#s6-grid .opt-card').forEach(c=>c.classList.remove('selected'));
+    state.selB={ name:val };
+    document.getElementById('s6-next-btn').disabled=false;
+  } else if(!document.querySelector('#s6-grid .opt-card.selected')){
+    state.selB=null;
+    document.getElementById('s6-next-btn').disabled=true;
+  }
+}
+
+// ── Custom toggle ─────────────────────────────────────────────────────────────
+function toggleCustom(id){
+  const wrap=document.getElementById(id);
+  const isOpen=wrap.classList.toggle('open');
+  if(isOpen){ wrap.querySelector('input').focus(); }
+}
+
+// ── Final invite SVG ──────────────────────────────────────────────────────────
+const catMeta = {
+  food:  { label:'WHERE WE\'RE EATING',  emoji:'🍽️' },
+  ride:  { label:'WHERE WE\'RE GOING',   emoji:'🚗' },
+  movie: { label:'WHAT WE\'RE WATCHING', emoji:'🎬' },
+  time:  { label:'WHAT WE\'RE DISCUSSING', emoji:'💬' },
+  custom:{ label:'WHAT WE\'RE DOING', emoji:'✨' },
+};
+
+function renderInvite(){
+  const svg=document.getElementById('invite-svg');
+  const dateObj=new Date(state.selectedDate.y, state.selectedDate.m, state.selectedDate.d);
+  const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const catName=currentCategoryName();
+  const meta=catMeta[state.category];
+  const isMovie=state.category==='movie';
+  const isFood=state.category==='food';
+
+  // Bottom section rows (below the perforation) — no MEET AT for movie since cinema covers location
+  const bottomRows=[
+    ...(state.selMeetPlace && state.category!=='movie' ?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
+    ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
+    {label:meta.label,value:state.selA?.name||''},
+    ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
+  ];
+
+  const W=400, pad=12, nr=15;
+  const topH=206;              // taller top to give heart+title room
+  const divY=pad+topH;
+  const rowH=54, rowGap=0;
+  const rowsH=bottomRows.length*(rowH+rowGap);
+  const H=pad+topH+nr*2+16+rowsH+64+pad;
+  const postDivY=divY+nr*2+14;
+
+  let rowsHTML='';
+  bottomRows.forEach((row,i)=>{
+    const y=postDivY+i*rowH;
+    const isLast=i===bottomRows.length-1;
+    const rowAccent=accentFor(i);
+    rowsHTML+=`
+      <text x="34" y="${y+15}" font-family="Outfit,sans-serif" font-size="8.5" letter-spacing="2" fill="${rowAccent}" font-weight="700">${row.label}</text>
+      <text x="34" y="${y+38}" font-family="Baloo 2,cursive" font-size="15" fill="#241238" font-weight="700">${row.value}</text>
+      ${!isLast?`<line x1="34" y1="${y+rowH-1}" x2="${W-34}" y2="${y+rowH-1}" stroke="#f2e6ff" stroke-width="1"/>`:''}`;
+  });
+
+  const bcY=postDivY+rowsH+14;
+  const bcWidths=[3,1,2,1,3,2,1,2,1,3,1,2,1,2,3,1,2,1,2,1,3,1,2,2,1];
+  const bcTotalW=bcWidths.reduce((a,w)=>a+w*2.8+2,0);
+  let bcHTML=''; let bx=(W-bcTotalW)/2; let bcColorIdx=0;
+  bcWidths.forEach((w,i)=>{ if(i%2===0){ bcHTML+=`<rect x="${bx.toFixed(1)}" y="${bcY}" width="${(w*2.8).toFixed(1)}" height="18" fill="${accentFor(bcColorIdx++)}" opacity="0.75" rx="0.5"/>`; } bx+=w*2.8+2; });
+
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=`
+    <defs>
+      <linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#fff3fb"/><stop offset="100%" stop-color="#f2e6ff"/>
+      </linearGradient>
+      <linearGradient id="rainbow" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#e40303"/><stop offset="20%" stop-color="#ff8c00"/><stop offset="40%" stop-color="#00c2b8"/><stop offset="60%" stop-color="#008026"/><stop offset="80%" stop-color="#0060ff"/><stop offset="100%" stop-color="#8a2be2"/>
+      </linearGradient>
+      <linearGradient id="heartRed" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ff5470"/><stop offset="100%" stop-color="#c31432"/>
+      </linearGradient>
+      <clipPath id="topCl"><rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${topH}" rx="14"/></clipPath>
+      <clipPath id="fullCl"><rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${H-pad*2}" rx="14"/></clipPath>
+    </defs>
+
+    <!-- Shadow -->
+    <rect x="${pad+3}" y="${pad+5}" width="${W-pad*2}" height="${H-pad*2}" rx="15" fill="rgba(107,33,168,0.12)"/>
+
+    <!-- Full white ticket -->
+    <rect x="${pad}" y="${pad}" width="${W-pad*2}" height="${H-pad*2}" rx="14" fill="#fff" stroke="#e6d3f7" stroke-width="1.5"/>
+
+    <!-- Rainbow top stripe -->
+    <rect x="${pad}" y="${pad}" width="${W-pad*2}" height="7" fill="url(#rainbow)"/>
+
+    <!-- Top gradient fill -->
+    <g clip-path="url(#topCl)">
+      <rect x="${pad}" y="${pad+7}" width="${W-pad*2}" height="${topH-7}" fill="url(#tg)"/>
+      <circle cx="355" cy="28" r="52" fill="#ffe27a" opacity="0.35"/>
+      <circle cx="45" cy="180" r="40" fill="#ff2fa1" opacity="0.12"/>
+    </g>
+
+    <!-- Heart circle — extra space below the top edge -->
+    <circle cx="${W/2}" cy="${pad+52}" r="28" fill="#fff" stroke="#e6d3f7" stroke-width="1.5"/>
+    <path d="M${W/2} ${pad+64}c-5.5-6.5-10-12-10-17.5 0-3.4 2.7-6 6-6 1.8 0 3.3.8 4 2.4.7-1.6 2.2-2.4 4-2.4 3.3 0 6 2.6 6 6 0 5.5-4.5 11-10 17.5Z" fill="url(#heartRed)"/>
+
+    <!-- Title — 20px below heart bottom (pad+52+28+20 = pad+100) -->
+    <text x="${W/2}" y="${pad+100}" text-anchor="middle" font-family="Baloo 2,cursive" font-size="17" font-weight="700" fill="#241238">Date with Chezy papa</text>
+    <text x="${W/2}" y="${pad+118}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" font-weight="600" fill="#8a2be2">${catName} Date ${meta.emoji}</text>
+
+    <!-- Divider inside top section -->
+    <line x1="${pad+22}" y1="${pad+130}" x2="${W-pad-22}" y2="${pad+130}" stroke="#ecdbfb" stroke-width="1"/>
+
+    <!-- WHEN (left) + TIME (right) -->
+    <text x="${pad+22}" y="${pad+144}" font-family="Outfit,sans-serif" font-size="8" letter-spacing="2" fill="#a259d9" font-weight="700">WHEN</text>
+    <text x="${W-pad-22}" y="${pad+144}" text-anchor="end" font-family="Outfit,sans-serif" font-size="8" letter-spacing="2" fill="#a259d9" font-weight="700">TIME</text>
+    <text x="${pad+22}" y="${pad+167}" font-family="Baloo 2,cursive" font-size="12.5" fill="#241238" font-weight="600">${dateStr}</text>
+    <text x="${W-pad-22}" y="${pad+167}" text-anchor="end" font-family="Baloo 2,cursive" font-size="14" fill="#241238" font-weight="600">${state.selectedTime}</text>
+
+    <!-- Vertical separator between WHEN and TIME -->
+    <line x1="${W/2}" y1="${pad+136}" x2="${W/2}" y2="${pad+174}" stroke="#ecdbfb" stroke-width="1"/>
+
+    <!-- TEAR HERE accent line -->
+    <line x1="${pad+22}" y1="${pad+185}" x2="${W-pad-22}" y2="${pad+185}" stroke="url(#rainbow)" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>
+    <text x="${W/2}" y="${pad+198}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="8" letter-spacing="1.5" fill="#8a2be2" opacity="0.7" font-weight="700">✂ TEAR HERE ✂</text>
+
+    <!-- Notch circles -->
+    <circle cx="${pad}" cy="${divY+nr}" r="${nr}" fill="#fff"/>
+    <circle cx="${W-pad}" cy="${divY+nr}" r="${nr}" fill="#fff"/>
+    <line x1="${pad+nr+4}" y1="${divY+nr}" x2="${W-pad-nr-4}" y2="${divY+nr}" stroke="#d9c2ee" stroke-dasharray="5,4" stroke-width="1.2"/>
+
+    <!-- Bottom rows -->
+    ${rowsHTML}
+
+    <!-- Barcode -->
+    ${bcHTML}
+    <text x="${W/2}" y="${bcY+34}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="10" fill="#a98bc7">can't wait 💕</text>`;
+
+  // 🎉 Confetti burst once the card is ready
+  setTimeout(launchConfetti, 120);
+}
+
+// ── Canvas for download/share (ticket style) ──────────────────────────────────
+function buildCanvas(){
+  const dateObj=new Date(state.selectedDate.y,state.selectedDate.m,state.selectedDate.d);
+  const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const isMovie=state.category==='movie';
+  const meta=catMeta[state.category];
+  const catName=currentCategoryName();
+  const isFood=state.category==='food';
+
+  const bottomRows=[
+    ...(state.selMeetPlace && state.category!=='movie' ?[{label:'MEET AT',value:state.selMeetPlace.name}]:[]),
+    ...(isFood&&state.selFoodItem?[{label:"WHAT WE'RE EATING",value:state.selFoodItem.name}]:[]),
+    {label:meta.label,value:state.selA?.name||''},
+    ...(isMovie&&state.selB?[{label:'CINEMA',value:state.selB.name}]:[]),
+  ];
+
+  const W=800, pad=30, nr=30;
+  const topH=412, rowH=108, rowGap=0;
+  const divY=pad+topH;
+  const rowsH=bottomRows.length*(rowH+rowGap);
+  const H=pad+topH+nr*2+32+rowsH+128+pad;
+  const postDivY=divY+nr*2+28;
+
+  const canvas=document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+
+  function rr(x,y,w,h,r){
+    ctx.beginPath(); ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  ctx.fillStyle='#fdf5ff'; ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.shadowColor='rgba(107,33,168,0.22)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
+  rr(pad,pad,W-pad*2,H-pad*2,28);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.restore();
+
+  rr(pad,pad,W-pad*2,H-pad*2,28);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.strokeStyle='#e6d3f7'; ctx.lineWidth=3; ctx.stroke();
+
+  // Rainbow top stripe
+  ctx.save();
+  rr(pad,pad,W-pad*2,topH,28);
+  ctx.clip();
+  const stripe=ctx.createLinearGradient(pad,0,W-pad,0);
+  stripe.addColorStop(0,'#e40303'); stripe.addColorStop(0.2,'#ff8c00'); stripe.addColorStop(0.4,'#00c2b8');
+  stripe.addColorStop(0.6,'#008026'); stripe.addColorStop(0.8,'#0060ff'); stripe.addColorStop(1,'#8a2be2');
+  ctx.fillStyle=stripe; ctx.fillRect(pad,pad,W-pad*2,14);
+  ctx.restore();
+
+  ctx.save();
+  rr(pad,pad,W-pad*2,topH,28);
+  ctx.clip();
+  const tg=ctx.createLinearGradient(0,0,W,topH);
+  tg.addColorStop(0,'#fff3fb'); tg.addColorStop(1,'#f2e6ff');
+  ctx.fillStyle=tg; ctx.fillRect(pad,pad+14,W-pad*2,topH-14);
+  ctx.fillStyle='rgba(255,226,122,0.35)'; ctx.beginPath(); ctx.arc(710,56,104,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,47,161,0.12)'; ctx.beginPath(); ctx.arc(90,360,80,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Heart circle — extra padding from top
+  ctx.fillStyle='#fff'; ctx.strokeStyle='#e6d3f7'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(W/2,pad+104,52,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(W/2,pad+104); ctx.scale(1.8,1.8);
+  const heartGrad=ctx.createLinearGradient(-16,-16,16,16);
+  heartGrad.addColorStop(0,'#ff5470'); heartGrad.addColorStop(1,'#c31432');
+  ctx.fillStyle=heartGrad;
+  ctx.beginPath(); ctx.moveTo(0,16);
+  ctx.bezierCurveTo(-9,9,-16,2,-16,-6); ctx.bezierCurveTo(-16,-12,-11.5,-16.5,-6,-16.5);
+  ctx.bezierCurveTo(-3,-16.5,-0.6,-15.2,0,-12.5); ctx.bezierCurveTo(0.6,-15.2,3,-16.5,6,-16.5);
+  ctx.bezierCurveTo(11.5,-16.5,16,-12,16,-6); ctx.bezierCurveTo(16,2,9,9,0,16);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+
+  // Title — 20px gap below heart bottom (pad+104+52+20 = pad+176)
+  ctx.fillStyle='#241238'; ctx.font='700 31px "Baloo 2",cursive'; ctx.textAlign='center';
+  ctx.fillText('Date with Chezy papa',W/2,pad+200);
+  ctx.fillStyle='#8a2be2'; ctx.font='600 20px Outfit,sans-serif';
+  ctx.fillText(`${catName} Date ${meta.emoji}`,W/2,pad+232);
+
+  ctx.strokeStyle='#ecdbfb'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(pad+44,pad+260); ctx.lineTo(W-pad-44,pad+260); ctx.stroke();
+
+  ctx.textAlign='left'; ctx.fillStyle='#a259d9'; ctx.font='700 17px Outfit,sans-serif';
+  ctx.fillText('WHEN',pad+44,pad+286);
+  ctx.textAlign='right'; ctx.fillText('TIME',W-pad-44,pad+286);
+  ctx.textAlign='left'; ctx.fillStyle='#241238'; ctx.font='600 25px "Baloo 2",cursive';
+  ctx.fillText(dateStr,pad+44,pad+320);
+  ctx.textAlign='right'; ctx.font='600 27px "Baloo 2",cursive';
+  ctx.fillText(state.selectedTime,W-pad-44,pad+320);
+
+  ctx.strokeStyle='#ecdbfb'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(W/2,pad+272); ctx.lineTo(W/2,pad+334); ctx.stroke();
+
+  const tearGrad=ctx.createLinearGradient(pad+44,0,W-pad-44,0);
+  tearGrad.addColorStop(0,'#e40303'); tearGrad.addColorStop(0.2,'#ff8c00'); tearGrad.addColorStop(0.4,'#00c2b8');
+  tearGrad.addColorStop(0.6,'#008026'); tearGrad.addColorStop(0.8,'#0060ff'); tearGrad.addColorStop(1,'#8a2be2');
+  ctx.strokeStyle=tearGrad; ctx.lineWidth=3;
+  ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(pad+44,pad+372); ctx.lineTo(W-pad-44,pad+372); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.textAlign='center'; ctx.fillStyle='rgba(138,43,226,0.7)'; ctx.font='700 14px Outfit,sans-serif';
+  ctx.fillText('✂  TEAR HERE  ✂',W/2,pad+396);
+
+  ctx.globalCompositeOperation='destination-out';
+  ctx.fillStyle='rgba(0,0,0,1)';
+  ctx.beginPath(); ctx.arc(pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W-pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+
+  ctx.fillStyle='#fdf5ff';
+  ctx.beginPath(); ctx.arc(pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W-pad,divY+nr,nr,0,Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle='#d9c2ee'; ctx.lineWidth=2.5;
+  ctx.setLineDash([10,8]);
+  ctx.beginPath(); ctx.moveTo(pad+nr+8,divY+nr); ctx.lineTo(W-pad-nr-8,divY+nr); ctx.stroke();
+  ctx.setLineDash([]);
+
+  bottomRows.forEach((row,i)=>{
+    const y=postDivY+i*rowH;
+    ctx.textAlign='left'; ctx.fillStyle=accentFor(i); ctx.font='700 17px Outfit,sans-serif';
+    ctx.fillText(row.label,pad+44,y+24);
+    ctx.fillStyle='#241238'; ctx.font='700 28px "Baloo 2",cursive';
+    ctx.fillText(row.value,pad+44,y+64);
+    if(i<bottomRows.length-1){
+      ctx.strokeStyle='#f2e6ff'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(pad+44,y+rowH-4); ctx.lineTo(W-pad-44,y+rowH-4); ctx.stroke();
+    }
+  });
+
+  const bcY=postDivY+rowsH+28;
+  const bw=[3,1,2,1,3,2,1,2,1,3,1,2,1,2,3,1,2,1,2,1,3,1,2,2,1];
+  const bTotalW=bw.reduce((a,w)=>a+w*5.6+4,0);
+  let bx=(W-bTotalW)/2; let bcColorIdx=0;
+  bw.forEach((w,i)=>{ if(i%2===0){ ctx.globalAlpha=0.8; ctx.fillStyle=accentFor(bcColorIdx++); ctx.fillRect(bx,bcY,w*5.6,36); ctx.globalAlpha=1; } bx+=w*5.6+4; });
+
+  ctx.textAlign='center'; ctx.fillStyle='#a98bc7'; ctx.font='400 20px Outfit,sans-serif';
+  ctx.fillText("can't wait 💕",W/2,bcY+66);
+  return canvas;
+}
+
+
+// ── Confetti ──────────────────────────────────────────────────────────────────
+function launchConfetti(){
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  const colors = ['#e40303','#ff8c00','#00c2b8','#008026','#0060ff','#8a2be2','#ff2fa1','#ffffff'];
+  const shapes = ['rect','ribbon','circle','heart','dot'];
+
+  const GRAVITY = 0.38;
+  const DRAG    = 0.985;
+  const pieces  = [];
+
+  // ── Spawn two staggered bursts (like two cannons) ──────────────────────────
+  function spawnBurst(count, angleMin, angleMax, speedMin, speedMax, delay){
+    setTimeout(()=>{
+      for(let i = 0; i < count; i++){
+        const angle   = angleMin + Math.random() * (angleMax - angleMin);
+        const speed   = speedMin + Math.random() * (speedMax - speedMin);
+        const color   = colors[Math.floor(Math.random() * colors.length)];
+        const shape   = shapes[Math.floor(Math.random() * shapes.length)];
+        const w       = shape === 'ribbon' ? 3 + Math.random() * 4 : 5 + Math.random() * 6;
+        const h       = shape === 'ribbon' ? 12 + Math.random() * 10 : w;
+
+        pieces.push({
+          x:      cx + (Math.random() - 0.5) * 20,
+          y:      cy + (Math.random() - 0.5) * 20,
+          vx:     Math.cos(angle) * speed,
+          vy:     Math.sin(angle) * speed,
+          w, h,
+          color,
+          shape,
+          rotation:  Math.random() * Math.PI * 2,
+          rotSpeed:  (Math.random() - 0.5) * 0.35,
+          opacity:   1,
+          wobble:    Math.random() * Math.PI * 2,
+          wobbleSpd: 0.08 + Math.random() * 0.06,
+          dead:      false,
+        });
+      }
+    }, delay);
+  }
+
+  // First burst — full 360°, fast & wide
+  spawnBurst(120, 0, Math.PI * 2, 8, 22, 0);
+  // Second burst — slightly delayed, more upward bias
+  spawnBurst(80, -Math.PI * 1.1, -Math.PI * 0.1 + 0.3, 10, 20, 80);
+  // Third pop — small burst for extra fullness
+  spawnBurst(50, 0, Math.PI * 2, 5, 14, 180);
+
+  // ── Heart path helper ────────────────────────────────────────────────────
+  function drawHeart(ctx, size){
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.3);
+    ctx.bezierCurveTo(-size * 0.5, -size * 0.1, -size, size * 0.5, 0, size);
+    ctx.bezierCurveTo(size, size * 0.5, size * 0.5, -size * 0.1, 0, size * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── Particle rendering ───────────────────────────────────────────────────
+  function renderPiece(p){
+    ctx.save();
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle   = p.color;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+
+    // squish effect: simulate tumbling by scaling on wobble
+    const scaleX = Math.abs(Math.cos(p.wobble)) * 0.6 + 0.4;
+    ctx.scale(scaleX, 1);
+
+    switch(p.shape){
+      case 'rect':
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        break;
+      case 'ribbon':
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        break;
+      case 'circle':
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'dot':
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'heart':
+        drawHeart(ctx, p.w * 0.55);
+        break;
+    }
+
+    // subtle shine strip on rectangles/ribbons
+    if(p.shape === 'rect' || p.shape === 'ribbon'){
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w * 0.35, p.h);
+    }
+
+    ctx.restore();
+  }
+
+  // ── Physics update ────────────────────────────────────────────────────────
+  function updatePiece(p){
+    p.vy     += GRAVITY;
+    p.vx     *= DRAG;
+    p.vy     *= DRAG;
+    p.x      += p.vx;
+    p.y      += p.vy;
+    p.rotation += p.rotSpeed;
+    p.wobble   += p.wobbleSpd;
+
+    // Fade out when falling below 80% of screen height or barely moving
+    const slow = Math.abs(p.vx) < 0.3 && Math.abs(p.vy) < 0.3;
+    if(p.y > canvas.height * 0.82 || slow){
+      p.opacity -= 0.025;
+    }
+    if(p.opacity <= 0 || p.y > canvas.height + 30) p.dead = true;
+  }
+
+  // ── Main loop ─────────────────────────────────────────────────────────────
+  let running = true;
+  function loop(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for(let i = pieces.length - 1; i >= 0; i--){
+      if(pieces[i].dead){ pieces.splice(i, 1); continue; }
+      updatePiece(pieces[i]);
+      renderPiece(pieces[i]);
+    }
+
+    if(running && pieces.length > 0){
+      requestAnimationFrame(loop);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'none';
+      running = false;
+    }
+  }
+
+  // Start loop once first burst arrives
+  setTimeout(loop, 10);
+}
+
+function withFonts(cb){
+  if(document.fonts&&document.fonts.ready){
+    Promise.all([document.fonts.load('700 40px "Baloo 2"'),document.fonts.load('700 22px Outfit'),document.fonts.load('600 30px "Baloo 2"')]).then(cb).catch(cb);
+  } else { cb(); }
+}
+
+function downloadInvite(){
+  withFonts(()=>{
+    const canvas=buildCanvas();
+    const url=canvas.toDataURL('image/png');
+    try{
+      const a=document.createElement('a'); a.download='date-with-chezypapa.png'; a.href=url;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }catch(e){}
+    window.open(url,'_blank');
+  });
+}
+
+function shareToWhatsapp(){
+  withFonts(()=>{
+    const canvas=buildCanvas();
+    const catName=currentCategoryName();
+    const dateObj=new Date(state.selectedDate.y,state.selectedDate.m,state.selectedDate.d);
+    const dateStr=dateObj.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const msg=`Date with Chezy papa 💕 ${catName} date on ${dateStr} at ${state.selectedTime}. ${state.selA?.name||''}${state.selB?' @ '+state.selB.name:''}`;
     canvas.toBlob(async blob=>{
       const file=new File([blob],'date-with-chezypapa.png',{type:'image/png'});
       if(navigator.canShare&&navigator.canShare({files:[file]})){
